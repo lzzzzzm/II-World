@@ -1,0 +1,9 @@
+opencv-python
+einops
+numba
+trimesh
+pyquaternion
+nuscenes-devkit
+scikit-image
+yapf==0.40.1
+numpy==1.23.5
