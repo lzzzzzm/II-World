@@ -16,7 +16,6 @@ from .occ_metrics import Metric_mIoU
 from terminaltables import AsciiTable
 from nuscenes.utils.geometry_utils import transform_matrix
 from mmdet3d.utils import get_root_logger
-from scipy.spatial.transform import Rotation
 from .plan_metrics import PlanningMetric
 
 from mmdet3d.core.bbox.structures import LiDARInstance3DBoxes, Box3DMode
