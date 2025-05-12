@@ -1,5 +1,29 @@
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> per class IoU of 6014 samples:
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> others - IoU = 73.44
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> barrier - IoU = 93.81
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> bicycle - IoU = 95.47
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> bus - IoU = 82.3
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> car - IoU = 81.96
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> construction_vehicle - IoU = 68.13
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> motorcycle - IoU = 95.44
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> pedestrian - IoU = 93.58
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> traffic_cone - IoU = 95.15
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> trailer - IoU = 75.02
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> truck - IoU = 79.23
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> driveable_surface - IoU = 85.74
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> other_flat - IoU = 94.5
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> sidewalk - IoU = 78.73
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> terrain - IoU = 76.66
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> manmade - IoU = 59.86
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> vegetation - IoU = 49.64
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> empty - IoU = 98.07
+# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> mIoU of 6014 samples: 81.1
+# 2025-05-12 16:26:44,316 - mmdet3d - INFO - ===> empty - IoU = 98.07
+# 2025-05-12 16:26:44,316 - mmdet3d - INFO - ===> non-empty - IoU = 68.12
+# {'semantics_miou': 81.1, 'binary_iou': 68.12}
+
 # nuscenes val scene=150, recommend use 6 gpus, 5 batchsize
 # Dataset Config
 dataset_name = 'occ3d'
@@ -37,8 +61,8 @@ test_sequences_split_num = 1
 
 # Running Config
 num_gpus = 8
-samples_per_gpu = 2
-workers_per_gpu = 0
+samples_per_gpu = 8
+workers_per_gpu = 4
 total_epoch = 24
 num_iters_per_epoch = int(28130 // (num_gpus * samples_per_gpu)*4.554)      # total samples: 28130
 
