@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import tempfile
 import warnings
+import pickle
 from os import path as osp
 
 import mmcv
@@ -69,8 +70,13 @@ class Custom3DDataset(Dataset):
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,
                  test_mode=False,
+                 split=None,
+                 pts_prefix=None,
+                 pose_file=None,
                  file_client_args=dict(backend='disk')):
         super().__init__()
+        self.pts_prefix = pts_prefix
+        self.split = split
         self.data_root = data_root
         self.ann_file = ann_file
         self.test_mode = test_mode
@@ -81,6 +87,12 @@ class Custom3DDataset(Dataset):
         self.CLASSES = self.get_classes(classes)
         self.file_client = mmcv.FileClient(**file_client_args)
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
+        if split is not None:
+            self.root_split = osp.join(self.data_root, split)
+        if pose_file is not None:
+            with open(pose_file, 'rb') as f:
+                pose_all = pickle.load(f)
+                self.pose_info = pose_all
 
         # load annotations
         if hasattr(self.file_client, 'get_local_path'):

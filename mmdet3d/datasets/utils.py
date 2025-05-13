@@ -2,9 +2,7 @@
 import mmcv
 
 # yapf: disable
-from mmdet3d.datasets.pipelines import (Collect3D, DefaultFormatBundle3D,
-                                        LoadPointsFromFile,
-                                        MultiScaleFlipAug3D,)
+from mmdet3d.datasets.pipelines import (Collect3D, DefaultFormatBundle3D,MultiScaleFlipAug3D,)
 from mmdet.datasets.pipelines import LoadImageFromFile, MultiScaleFlipAug
 # yapf: enable
 from .builder import PIPELINES
@@ -24,7 +22,7 @@ def is_loading_function(transform):
             When transform is `MultiScaleFlipAug3D`, we return None.
     """
     # TODO: use more elegant way to distinguish loading modules
-    loading_functions = (LoadImageFromFile, LoadPointsFromFile, DefaultFormatBundle3D,
+    loading_functions = (LoadImageFromFile, DefaultFormatBundle3D,
                          Collect3D)
     if isinstance(transform, dict):
         obj_cls = PIPELINES.get(transform['type'])

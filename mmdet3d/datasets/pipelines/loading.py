@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import copy
 import os
 
 import cv2
@@ -12,6 +13,7 @@ from PIL import Image
 from pyquaternion import Quaternion
 from nuscenes.utils.geometry_utils import transform_matrix
 
+from configs.scene_tokenizer.ii_scene_tokenizer_waymo_4f import dataset_type
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
 from ...core.bbox import LiDARInstance3DBoxes
@@ -80,18 +82,48 @@ class LoadStreamOcc3D(object):
     def __init__(self,
                  to_long=True,
                  to_float=False,
+                 dataset_type='occ3d',
                  ):
         self.to_long = to_long
         self.to_float = to_float
+        self.dataset_type = dataset_type
+        # waymo dataset cls map to occ3d
+        self.waymo_map = {
+            0: 0,  # TYPE_GENERALOBJECT
+            1: 4,  # TYPE_VEHICLE
+            2: 7,  # TYPE_PEDESTRIAN
+            3: 15,  # TYPE_SIGN
+            4: 2,  # TYPE_CYCLIST
+            5: 15,  # TYPE_TRAFFIC_LIGHT
+            6: 15,  # TYPE_POLE
+            7: 8,  # TYPE_CONSTRUCTION_CONE
+            8: 2,  # TYPE_BICYCLE
+            9: 6,  # TYPE_MOTORCYCLE
+            10: 15,  # TYPE_BUILDING
+            11: 16,  # TYPE_VEGETATION
+            12: 16,  # TYPE_TREE_TRUNK
+            13: 11,  # TYPE_ROAD
+            14: 13,  # TYPE_WALKABLE
+            23: 17,  # TYPE_FREE
+        }
 
     def __call__(self, results):
         curr_occ_path = results['occ_path']
         previous_occ_path = results['previous_occ_path']
         future_occ_path = results['future_occ_path']
         # load current frame
-        occ_gt_label = os.path.join(curr_occ_path, "labels.npz")
-        occ_labels = np.load(occ_gt_label)
-        curr_semantics = occ_labels['semantics']
+        if self.dataset_type == 'occ3d':
+            occ_gt_label = os.path.join(curr_occ_path, "labels.npz")
+            occ_labels = np.load(occ_gt_label)
+            curr_semantics = occ_labels['semantics']
+        elif self.dataset_type == 'waymo':
+            occ_labels = np.load(curr_occ_path)
+            curr_semantics = occ_labels['voxel_label']
+            # map the waymo cls to occ3d cls
+            map_semantics = copy.deepcopy(curr_semantics)
+            for key in self.waymo_map.keys():
+                map_semantics[curr_semantics == key] = self.waymo_map[key]
+            curr_semantics = map_semantics
 
         # load previous frame
         previous_semantics = []

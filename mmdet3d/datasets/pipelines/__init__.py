@@ -2,7 +2,7 @@
 from .compose import Compose
 from .dbsampler import DataBaseSampler
 from .formating import Collect3D, DefaultFormatBundle, DefaultFormatBundle3D
-from .loading import (LoadAnnotations, BEVAug, LoadPointsFromFile, PointToMultiViewDepth,PrepareImageInputs)
+from .loading import (LoadAnnotations)
 from .test_time_aug import MultiScaleFlipAug3D
 # yapf: disable
 from .transforms_3d import (AffineResize, BackgroundPointsFilter,
@@ -19,10 +19,10 @@ from .transforms_3d import (AffineResize, BackgroundPointsFilter,
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
     'PointShuffle', 'ObjectRangeFilter', 'PointsRangeFilter', 'Collect3D',
-    'Compose',  'LoadPointsFromFile',
+    'Compose',
     'DefaultFormatBundle', 'DefaultFormatBundle3D', 'DataBaseSampler', 'IndoorPointSample',
     'PointSample', 'MultiScaleFlipAug3D', 'BackgroundPointsFilter',
     'VoxelBasedPointSampler', 'GlobalAlignment', 'IndoorPatchPointSample', 'ObjectNameFilter', 'RandomDropPointsColor',
     'RandomJitterPoints', 'AffineResize', 'RandomShiftScale', 'MultiViewWrapper', 'RandomRotate',
-    'RangeLimitedRandomCrop', 'PrepareImageInputs', 'PointToMultiViewDepth', 'ToEgo', 'VelocityAug', 'LoadAnnotations', 'BEVAug',
+    'RangeLimitedRandomCrop', 'ToEgo', 'VelocityAug', 'LoadAnnotations',
 ]

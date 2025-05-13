@@ -1,32 +1,8 @@
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> per class IoU of 6014 samples:
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> others - IoU = 73.44
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> barrier - IoU = 93.81
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> bicycle - IoU = 95.47
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> bus - IoU = 82.3
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> car - IoU = 81.96
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> construction_vehicle - IoU = 68.13
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> motorcycle - IoU = 95.44
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> pedestrian - IoU = 93.58
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> traffic_cone - IoU = 95.15
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> trailer - IoU = 75.02
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> truck - IoU = 79.23
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> driveable_surface - IoU = 85.74
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> other_flat - IoU = 94.5
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> sidewalk - IoU = 78.73
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> terrain - IoU = 76.66
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> manmade - IoU = 59.86
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> vegetation - IoU = 49.64
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> empty - IoU = 98.07
-# 2025-05-12 16:26:44,315 - mmdet3d - INFO - ===> mIoU of 6014 samples: 81.1
-# 2025-05-12 16:26:44,316 - mmdet3d - INFO - ===> empty - IoU = 98.07
-# 2025-05-12 16:26:44,316 - mmdet3d - INFO - ===> non-empty - IoU = 68.12
-# {'semantics_miou': 81.1, 'binary_iou': 68.12}
-
 # nuscenes val scene=150, recommend use 6 gpus, 5 batchsize
 # Dataset Config
-dataset_name = 'occ3d'
+dataset_name = 'waymo-Occ3D'
 eval_metric = 'miou'
 
 class_weights = [0.0727, 0.0692, 0.0838, 0.0681, 0.0601, 0.0741, 0.0823, 0.0688, 0.0773, 0.0681, 0.0641, 0.0527, 0.0655, 0.0563, 0.0558, 0.0541, 0.0538, 0.0468] # occ-3d
@@ -130,18 +106,18 @@ model = dict(
 )
 
 # Data
-dataset_type = 'NuScenesWorldDataset'
-data_root = 'data/nuscenes/'
+dataset_type = 'WaymoWorldDataset'
+data_root = 'data/waymo/'
 file_client_args = dict(backend='disk')
 
 train_pipeline = [
-    dict(type='LoadStreamOcc3D', to_long=True),
+    dict(type='LoadStreamOcc3D', to_long=True, dataset_type='waymo'),
     dict(type='BEVAugStream', bda_aug_conf=bda_aug_conf, is_train=True),
     dict(type='Collect3D', keys=['voxel_semantics'])
 ]
 
 test_pipeline = [
-    dict(type='LoadStreamOcc3D', to_long=True),
+    dict(type='LoadStreamOcc3D', to_long=True, dataset_type='waymo'),
     dict(type='BEVAugStream', bda_aug_conf=bda_aug_conf, is_train=False),
     dict(type='Collect3D', keys=['voxel_semantics'])
 ]
@@ -158,7 +134,11 @@ share_data_config = dict(
 test_data_config = dict(
     pipeline=test_pipeline,
     load_future_frame_number=test_load_future_frame_number,
-    ann_file=data_root + 'world-nuscenes_infos_train.pkl')
+    ann_file=data_root + 'waymo_infos_val.pkl',
+    pose_file=data_root + 'cam_infos_vali.pkl',
+    split='validation',
+    data_root=data_root,
+)
 
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -166,7 +146,9 @@ data = dict(
     test_dataloader=dict(runner_type='IterBasedRunnerEval'),
     train=dict(
         data_root=data_root,
-        ann_file=data_root + 'world-nuscenes_infos_train.pkl',
+        ann_file=data_root + 'waymo_infos_val.pkl',
+        pose_file=data_root + 'cam_infos_vali.pkl',
+        split='validation',
         pipeline=train_pipeline,
         classes=occ_class_names,
         test_mode=False,
