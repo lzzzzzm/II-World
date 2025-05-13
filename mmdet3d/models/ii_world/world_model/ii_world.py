@@ -451,7 +451,7 @@ class II_World(CenterPoint):
         # Trajectory prediction
         return_dict['pred_ego_fut_trajs'] = pred_trajs.astype(np.float16)
         return_dict['targ_ego_fut_trajs'] = targ_trajs.astype(np.float16)
-        # return_dict['bev_cost_map'] = bev_cost_map.cpu().numpy().astype(np.uint8)
+
         return_dict['gt_bboxes_3d'] = gt_bboxes_3d
         return_dict['gt_attr_labels'] = gt_attr_labels
 
@@ -459,7 +459,6 @@ class II_World(CenterPoint):
         return_dict['occ_index'] = [img_meta['occ_index'] for img_meta in img_metas]
         return_dict['index'] = [img_meta['index'] for img_meta in img_metas]
         return_dict['sample_idx'] = sample_idx
-        # return_dict['pred_vis_semantics'] = vis_voxel_semantics.cpu().numpy().astype(np.uint8)
 
         return [return_dict]
 
@@ -489,5 +488,5 @@ class II_World(CenterPoint):
 
         loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
         loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
-        # loss_dict['rotation_loss'] = self.rotation_loss(pred_ego_to_globals, targ_ego_to_globals, valid_frame, None)
+
         return loss_dict

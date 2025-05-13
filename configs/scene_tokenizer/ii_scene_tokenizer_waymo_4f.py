@@ -1,6 +1,29 @@
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 
-# nuscenes val scene=150, recommend use 6 gpus, 5 batchsize
+# Zero-shot evaluation
+# 2025-05-13 17:10:38,261 - mmdet3d - INFO - ===> per class IoU of 39701 samples:
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> others - IoU = 63.21
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> barrier - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> bicycle - IoU = 91.11
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> bus - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> car - IoU = 80.26
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> construction_vehicle - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> motorcycle - IoU = 62.33
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> pedestrian - IoU = 90.1
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> traffic_cone - IoU = 84.34
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> trailer - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> truck - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> driveable_surface - IoU = 89.95
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> other_flat - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> sidewalk - IoU = 84.32
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> terrain - IoU = nan
+# 2025-05-13 17:10:38,264 - mmdet3d - INFO - ===> manmade - IoU = 59.35
+# 2025-05-13 17:10:38,265 - mmdet3d - INFO - ===> vegetation - IoU = 57.75
+# 2025-05-13 17:10:38,265 - mmdet3d - INFO - ===> empty - IoU = 97.79
+# 2025-05-13 17:10:38,265 - mmdet3d - INFO - ===> mIoU of 39701 samples: 76.27
+# 2025-05-13 17:10:38,268 - mmdet3d - INFO - ===> empty - IoU = 97.79
+# 2025-05-13 17:10:38,268 - mmdet3d - INFO - ===> non-empty - IoU = 74.62
+# {'semantics_miou': 76.27, 'binary_iou': 74.62}
 # Dataset Config
 dataset_name = 'waymo-Occ3D'
 eval_metric = 'miou'

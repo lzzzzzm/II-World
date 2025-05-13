@@ -214,6 +214,8 @@ class Metric_mIoU():
             ret_dict[self.class_names[i]] = str(round(mIoU[i] * 100, 2))
             table_columns.append([f'{mIoU[i]:.4f}'])
 
+        mIoU[mIoU==0] = None
+
         table_columns.append([f'{round(np.nanmean(mIoU[:self.num_classes-1]) * 100, 2):.4f}'])
         table_data = [header]
         table_rows = list(zip(*table_columns))
