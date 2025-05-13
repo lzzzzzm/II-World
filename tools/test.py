@@ -209,13 +209,10 @@ def main():
     data_loader = build_dataloader(dataset, **test_loader_cfg)
 
     # build the model and load checkpoint
-    if not args.no_aavt:
-        if '4D' in cfg.model.type:
-            cfg.model.align_after_view_transfromation=True
-    if 'num_proposals_test' in cfg and cfg.model.type=='DAL':
-        cfg.model.pts_bbox_head.num_proposals=cfg.num_proposals_test
     cfg.model.train_cfg = None
+    cfg.model.test_mode = True
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
+
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)

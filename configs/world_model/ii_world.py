@@ -24,9 +24,6 @@ grid_config = {
     'depth': [1.0, 45.0, 0.5],
 }
 
-# freeze_dict = dict(
-#     vqvae=True,
-# )
 # In nuscenes data label is marked in 0.5s interval, so we can load future frame 6 to predict 3s future
 train_load_future_frame_number = 6      # 0.5s interval 1 frame
 train_load_previous_frame_number = 0    # 0.5s interval 1 frame
@@ -77,6 +74,7 @@ model = dict(
     test_future_frame=test_load_future_frame_number,
     test_previous_frame=test_load_previous_frame_number,
     memory_frame_number=memory_frame_number,
+    test_mode=False,
     feature_similarity_loss=dict(
         type='FeatSimLoss',
         loss_weight=1.0,
@@ -256,7 +254,7 @@ test_data_config = dict(
     pipeline=test_pipeline,
     load_future_frame_number=test_load_future_frame_number,
     load_previous_frame_number=test_load_previous_frame_number,
-    ann_file=data_root + 'world-lidar-v2-nuscenes_infos_val.pkl')
+    ann_file=data_root + 'world-nuscenes_mini_infos_val.pkl')
 
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -264,7 +262,7 @@ data = dict(
     test_dataloader=dict(runner_type='IterBasedRunnerEval'),
     train=dict(
         data_root=data_root,
-        ann_file=data_root + 'world-lidar-v2-nuscenes_infos_train.pkl',
+        ann_file=data_root + 'world-nuscenes_mini_infos_train.pkl',
         pipeline=train_pipeline,
         classes=occ_class_names,
         test_mode=False,

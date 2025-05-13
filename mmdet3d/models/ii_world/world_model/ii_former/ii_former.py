@@ -138,7 +138,6 @@ class II_Former(BaseModule):
             use_gt_rate=None,
             use_gt=False,
             train=True,
-            history_plan_embed=None,
             curr_ego_mode=None,
             **kwargs):
         """

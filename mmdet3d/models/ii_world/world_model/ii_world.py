@@ -66,13 +66,14 @@ class II_World(CenterPoint):
                  feature_similarity_loss=None,
                  trajs_loss=None,
                  rotation_loss=None,
+                 test_mode=False,
                  **kwargs):
         super(II_World, self).__init__(**kwargs)
         # -------- Model Module --------
-        if not self.training:
-            self.vqvae = builder.build_detector(vqvae)
         self.pose_encoder = builder.build_head(pose_encoder)
         self.transformer = build_transformer(transformer)
+        if test_mode:
+            self.vqvae = builder.build_detector(vqvae)
 
         # -------- Video Params --------
         self.observe_rotation = None
@@ -102,6 +103,9 @@ class II_World(CenterPoint):
         self.foreground_cls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14]
         self.free_cls = 17
         self.save_index = 0
+
+    def init_vqvae(self, vqvae):
+        self.vqvae = builder.build_detector(vqvae)
 
     def obtain_scene_from_token(self, token):
         if token.dim() == 4:
@@ -154,93 +158,46 @@ class II_World(CenterPoint):
 
         # -------------- Load GT Transformation --------------
         # Training information
-        curr_to_future_ego_rt = torch.stack(
-            [torch.tensor(img_meta['curr_to_future_ego_rt'], device=latent.device, dtype=torch.float32) for img_meta in
-             img_metas]
-        )
-        curr_ego_to_global_rt = torch.stack(
-            [torch.tensor(img_meta['curr_ego_to_global'], device=latent.device, dtype=torch.float32) for img_meta in
-             img_metas]
-        )
-        ego_to_global_rotation = torch.stack(
-            [torch.tensor(img_meta['ego_to_global_rotation'], device=latent.device, dtype=torch.float32) for img_meta in
-             img_metas]
-        )  # quarternion [bs, f, 4]
-        ego_to_global_translation = torch.stack(
-            [torch.tensor(img_meta['ego_to_global_translation'], device=latent.device, dtype=torch.float32) for img_meta
-             in img_metas]
-        )
+        curr_to_future_ego_rt = torch.stack([torch.tensor(img_meta['curr_to_future_ego_rt'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
+        curr_ego_to_global_rt = torch.stack([torch.tensor(img_meta['curr_ego_to_global'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
+        ego_to_global_rotation = torch.stack([torch.tensor(img_meta['ego_to_global_rotation'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])  # quarternion [bs, f, 4]
+        ego_to_global_translation = torch.stack([torch.tensor(img_meta['ego_to_global_translation'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
         # Change translation to delta translation, only utilize x,y
         ego_to_global_delta_translation = ego_to_global_translation[:, 1:] - ego_to_global_translation[:, :-1]
         ego_to_global_delta_translation = ego_to_global_delta_translation[..., :2]
         # Compute relative rotation
         ego_to_global_relative_rotation = compute_relative_rotation(ego_to_global_rotation)
 
-        gt_ego_lcf_feat = torch.stack(
-            [torch.tensor(img_meta['gt_ego_lcf_feat'], device=latent.device, dtype=torch.float32) for img_meta in
-             img_metas]
-        )
-        gt_ego_fut_cmd = torch.stack(
-            [torch.tensor(img_meta['gt_ego_fut_cmd'], device=latent.device, dtype=torch.float32) for img_meta in
-             img_metas]
-        )
+        gt_ego_lcf_feat = torch.stack([torch.tensor(img_meta['gt_ego_lcf_feat'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
+        gt_ego_fut_cmd = torch.stack([torch.tensor(img_meta['gt_ego_fut_cmd'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
         # only for inference
         if not train:
-            ego_from_sensor = torch.stack(
-                [torch.tensor(img_meta['ego_from_sensor'], device=latent.device, dtype=torch.float32) for img_meta in
-                 img_metas]
-            )
-            targ_pose_mat = torch.stack(
-                [torch.tensor(img_meta['pose_mat'], device=latent.device, dtype=torch.float32) for img_meta in
-                 img_metas]
-            )
+            ego_from_sensor = torch.stack([torch.tensor(img_meta['ego_from_sensor'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
+            targ_pose_mat = torch.stack([torch.tensor(img_meta['pose_mat'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
             # when inference, only support batch size = 1 now
             assert bs == 1
             gt_bboxes_3d = img_metas[0]['gt_bboxes_3d']
             gt_attr_labels = img_metas[0]['gt_attr_labels']
-            ego_to_lidar = torch.stack(
-                [torch.tensor(img_meta['ego_to_lidar'], device=latent.device, dtype=torch.float32) for img_meta in
-                 img_metas]
-            )
+            ego_to_lidar = torch.stack([torch.tensor(img_meta['ego_to_lidar'], device=latent.device, dtype=torch.float32) for img_meta in img_metas])
 
         # ------------- History observe information -------------
-        start_of_sequence = torch.stack(
-            [torch.tensor(img_meta['start_of_sequence'], device=latent.device) for img_meta in img_metas])
+        start_of_sequence = torch.stack([torch.tensor(img_meta['start_of_sequence'], device=latent.device) for img_meta in img_metas])
         # Deal with first frame
         if self.observe_rotation is None:
             self.observe_rotation = ego_to_global_rotation[:, 0:1].repeat(1, self.observe_frame_number, 1)
-            self.observe_relative_rotation = torch.ones(bs, self.observe_frame_number, 4, device=latent.device,
-                                                        dtype=torch.float32)
-            self.observe_delta_translation = torch.zeros(bs, self.observe_frame_number, 2, device=latent.device,
-                                                         dtype=torch.float32)
+            self.observe_relative_rotation = torch.ones(bs, self.observe_frame_number, 4, device=latent.device, dtype=torch.float32)
+            self.observe_delta_translation = torch.zeros(bs, self.observe_frame_number, 2, device=latent.device, dtype=torch.float32)
             self.observe_ego_lcf_feat = gt_ego_lcf_feat[:, 0:1].repeat(1, self.observe_frame_number, 1)
             self.observe_ego_mode = gt_ego_fut_cmd[:, 0:1].repeat(1, self.observe_frame_number, 1)
-            self.observe_curr_to_futu = torch.zeros(bs, self.observe_frame_number, 4, 4, device=latent.device,
-                                                    dtype=torch.float32)
-            self.observe_plan_embed = torch.zeros(bs, self.observe_frame_number, 128, device=latent.device,
-                                                  dtype=torch.float32)
+            self.observe_curr_to_futu = torch.zeros(bs, self.observe_frame_number, 4, 4, device=latent.device, dtype=torch.float32)
 
         if start_of_sequence.sum() > 0:
-            self.observe_rotation[start_of_sequence] = ego_to_global_rotation[start_of_sequence, 0:1].repeat(1,
-                                                                                                             self.observe_frame_number,
-                                                                                                             1)
-            self.observe_relative_rotation[start_of_sequence] = torch.ones(start_of_sequence.sum(),
-                                                                           self.observe_frame_number, 4,
-                                                                           device=latent.device, dtype=torch.float32)
-            self.observe_delta_translation[start_of_sequence] = torch.zeros(start_of_sequence.sum(),
-                                                                            self.observe_frame_number, 2,
-                                                                            device=latent.device, dtype=torch.float32)
-            self.observe_ego_lcf_feat[start_of_sequence] = gt_ego_lcf_feat[start_of_sequence, 0:1].repeat(1,
-                                                                                                          self.observe_frame_number,
-                                                                                                          1)
-            self.observe_ego_mode[start_of_sequence] = gt_ego_fut_cmd[start_of_sequence, 0:1].repeat(1,
-                                                                                                     self.observe_frame_number,
-                                                                                                     1)
-            self.observe_curr_to_futu[start_of_sequence] = torch.zeros(start_of_sequence.sum(),
-                                                                       self.observe_frame_number, 4, 4,
-                                                                       device=latent.device, dtype=torch.float32)
-            self.observe_plan_embed[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number,
-                                                                     128, device=latent.device, dtype=torch.float32)
+            self.observe_rotation[start_of_sequence] = ego_to_global_rotation[start_of_sequence, 0:1].repeat(1, self.observe_frame_number, 1)
+            self.observe_relative_rotation[start_of_sequence] = torch.ones(start_of_sequence.sum(), self.observe_frame_number, 4, device=latent.device, dtype=torch.float32)
+            self.observe_delta_translation[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 2, device=latent.device, dtype=torch.float32)
+            self.observe_ego_lcf_feat[start_of_sequence] = gt_ego_lcf_feat[start_of_sequence, 0:1].repeat(1, self.observe_frame_number, 1)
+            self.observe_ego_mode[start_of_sequence] = gt_ego_fut_cmd[start_of_sequence, 0:1].repeat(1, self.observe_frame_number, 1)
+            self.observe_curr_to_futu[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 4, 4, device=latent.device, dtype=torch.float32)
 
         # Update observe information
         self.observe_ego_mode = torch.cat([self.observe_ego_mode[:, 1:], gt_ego_fut_cmd[:, 0:1]], dim=1)
@@ -250,14 +207,11 @@ class II_World(CenterPoint):
         # -------------- Init hisotry & input tinformation --------------
         history_token = latent[:, 0:1].repeat(1, self.memory_frame_number, 1, 1, 1).detach().clone()  # bs, f, c, w, h
         history_rotation = ego_to_global_rotation[:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
-        history_relative_rotation = torch.ones(bs, self.memory_frame_number, 4, device=latent.device,
-                                               dtype=torch.float32)
-        history_delta_translation = torch.zeros(bs, self.memory_frame_number, 2, device=latent.device,
-                                                dtype=torch.float32)
+        history_relative_rotation = torch.ones(bs, self.memory_frame_number, 4, device=latent.device, dtype=torch.float32)
+        history_delta_translation = torch.zeros(bs, self.memory_frame_number, 2, device=latent.device, dtype=torch.float32)
         history_ego_lcf_feat = gt_ego_lcf_feat[:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
         history_ego_mode = gt_ego_fut_cmd[:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
-        history_curr_to_future = torch.zeros(bs, self.memory_frame_number, 4, 4, device=latent.device,
-                                             dtype=torch.float32)
+        history_curr_to_future = torch.zeros(bs, self.memory_frame_number, 4, 4, device=latent.device, dtype=torch.float32)
         history_plan_embed = torch.zeros(bs, self.memory_frame_number, 128, device=latent.device, dtype=torch.float32)
 
         # update history with observe information
@@ -308,7 +262,6 @@ class II_World(CenterPoint):
                 use_gt_rate=use_gt_rate,
                 use_gt=use_gt,
                 train=train,
-                history_plan_embed=history_plan_embed,
                 curr_ego_mode=curr_ego_mode,
             )
             pred_ego_lcf_feat = self.pose_encoder.get_ego_feat(
@@ -386,8 +339,7 @@ class II_World(CenterPoint):
             [self.observe_delta_translation[:, 1:], ego_to_global_delta_translation[:, 0:1]], dim=1)
         self.observe_relative_rotation = torch.cat(
             [self.observe_relative_rotation[:, 1:], ego_to_global_relative_rotation[:, 0:1]], dim=1)
-        self.observe_plan_embed = torch.cat([self.observe_plan_embed[:, 1:], pred_plan_embeds[0].detach().clone()],
-                                            dim=1)
+        self.observe_plan_embed = torch.cat([self.observe_plan_embed[:, 1:], pred_plan_embeds[0].detach().clone()], dim=1)
 
         return_dict = dict(
             pred_latents=torch.stack(pred_latents, dim=1),  # [bs, f, c, w, h], pred future latents
@@ -422,18 +374,15 @@ class II_World(CenterPoint):
         pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
         pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
 
-        vis_voxel_semantics = torch.cat([pred_curr_voxel_semantics, pred_voxel_semantics], dim=1)
-
         # Process Trajectory info
         ego_from_sensor, targ_pose_mat = return_dict['ego_from_sensor'], return_dict['targ_pose_mat']
         targ_ego_to_globals, pred_ego_to_global = return_dict['targ_ego_to_globals'], return_dict['pred_ego_to_globals']
         ego_to_lidar = return_dict['ego_to_lidar']
-        pred_pose_mat = torch.matmul(pred_ego_to_global,
-                                     ego_from_sensor.unsqueeze(1).repeat(1, self.test_future_frame, 1, 1))
+        pred_pose_mat = torch.matmul(pred_ego_to_global, ego_from_sensor.unsqueeze(1).repeat(1, self.test_future_frame, 1, 1))
         pred_pose_mat = torch.cat([targ_pose_mat[:, 0:1], pred_pose_mat], dim=1)
         pred_ego_to_global = torch.cat([targ_ego_to_globals[:, 0:1], pred_ego_to_global], dim=1)
-        pred_trajs = self.decode_pose(pred_pose_mat, pred_ego_to_global, ego_to_lidar)  # pred
-        # pred_trajs = self.decode_pose(targ_pose_mat, targ_ego_to_globals, ego_to_lidar)    # GT
+        # pred_trajs = self.decode_pose(pred_pose_mat, pred_ego_to_global, ego_to_lidar)  # pred
+        pred_trajs = self.decode_pose(targ_pose_mat, targ_ego_to_globals, ego_to_lidar)    # GT
         targ_trajs = np.array([img_meta['gt_ego_fut_trajs'] for img_meta in img_metas])
 
         #
