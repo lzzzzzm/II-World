@@ -90,12 +90,6 @@ model = dict(
     pose_encoder=dict(
         type='PoseEncoder',
         history_frame_number=memory_frame_number,
-        positional_encoding=dict(
-            type='PositionalEncoding',
-            num_feats=pos_dim,
-            row_num_embed=row_num_embed,
-            col_num_embed=col_num_embed,
-        )
     ),
     transformer=dict(
         type='II_Former',

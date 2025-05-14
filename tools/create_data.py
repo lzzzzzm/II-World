@@ -148,6 +148,7 @@ def add_ann_adj_info(extra_tag, dataroot, nuscenes_version, train_half=False, tr
             # update pose related info
             dataset['infos'][id]['pose_mat'] = info['pose_mat']
             dataset['infos'][id]['ego_from_sensor'] = info['ego_from_sensor']
+            dataset['infos'][id]['global_from_ego'] = info['global_from_ego']
 
         with open('%s/%s_infos_%s.pkl' % (dataroot, extra_tag, set),'wb') as fid:
             pickle.dump(dataset, fid)

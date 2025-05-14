@@ -303,7 +303,8 @@ def _fill_trainval_infos(nusc,
             'fut_valid_flag': fut_valid_flag,
             'map_location': map_location,
             'pose_mat': pose_mat,
-            'ego_from_sensor': ego_from_sensor
+            'ego_from_sensor': ego_from_sensor,
+            'global_from_ego': global_from_ego,
         }
 
         l2e_r = info['lidar2ego_rotation']

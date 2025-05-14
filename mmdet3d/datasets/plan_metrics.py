@@ -218,15 +218,15 @@ class PlanningMetric():
             |
             |
             0------->
-                    x
+                    xr([-1, 1], device=trajs.device)
+        # gt_trajs = gt_trajs * torch
         gt_trajs: torch.Tensor (B, n_future, 2)
         segmentation: torch.Tensor (B, n_future, 200, 200)
 
         '''
         B, n_future, _ = trajs.shape
         # import pdb; pdb.set_trace()
-        # trajs = trajs * torch.tensor([-1, 1], device=trajs.device)
-        # gt_trajs = gt_trajs * torch.tensor([-1, 1], device=gt_trajs.device)
+        # trajs = trajs * torch.tenso.tensor([-1, 1], device=gt_trajs.device)
 
         obj_coll_sum = torch.zeros(n_future, device=segmentation.device)
         obj_box_coll_sum = torch.zeros(n_future, device=segmentation.device)

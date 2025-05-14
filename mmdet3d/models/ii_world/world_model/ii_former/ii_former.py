@@ -88,10 +88,11 @@ class II_Former(BaseModule):
                  use_transformation=True,
                  history_frame_number=5,
                  use_pred=False,
+                 task_mode='generate',
                  **kwargs):
         super(II_Former, self).__init__(**kwargs)
-        self.low_encoder = build_transformer_layer_sequence(low_encoder)
-        self.high_encoder = build_transformer_layer_sequence(high_encoder)
+        self.intra_encoder = build_transformer_layer_sequence(low_encoder)
+        self.inter_decoder = build_transformer_layer_sequence(high_encoder)
         self.positional_encoding = build_positional_encoding(positional_encoding)
         self.temporal_embedding = nn.Embedding(history_frame_number + 1, embed_dims)
 
@@ -102,15 +103,18 @@ class II_Former(BaseModule):
         self.use_transformation = use_transformation
         self.use_pred = use_pred
 
+        self.task_mode = task_mode
+
         # utilize U-Net to process multi-resolution features
-        self.u_net = MXUNet(embed_dims, len(self.low_encoder.layers))
+        self.u_net = MXUNet(embed_dims, len(self.intra_encoder.layers))
 
         self.plan_embed = nn.Sequential(
             nn.Linear(12, embed_dims),
             nn.ReLU(True),
             nn.Linear(embed_dims, embed_dims)
         )
-        ego_mode = 1
+        ego_mode = 3
+        self.ego_mode = ego_mode
         self.plan_translation_output = nn.Sequential(
             nn.Linear(embed_dims, embed_dims // 2),
             nn.Softplus(),
@@ -124,77 +128,13 @@ class II_Former(BaseModule):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    @force_fp32(apply_to=('mlvl_feats', 'bev_queries', 'prev_bev', 'bev_pos'))
-    def forward(
-            self,
-            bev_queries,
-            hist_queries,
-            plan_queries,
-            curr_to_future_ego_rt=None,
-            curr_ego_to_global=None,
-            curr_translation=None,
-            curr_rotation=None,
-            next_rotation=None,
-            use_gt_rate=None,
-            use_gt=False,
-            train=True,
-            curr_ego_mode=None,
-            **kwargs):
-        """
-        obtain bev features.
-        input bev_queries: [bs, c, w, h]
-        """
-        bs, c, w, h = bev_queries.shape
-        dtype = bev_queries.dtype
+    def process_transformation_matrix(self, bev_queries, curr_info, plan_output):
+        bs = bev_queries.shape[0]
 
-        # Process current queries
-        bev_queries = bev_queries.reshape(bs, c, w * h).permute(0, 2, 1)  # change to [bs, w*h, c]
-        bev_pos = self.positional_encoding(bs, w, h, bev_queries.device).to(dtype)
-        bev_pos = bev_pos.flatten(2).permute(0, 2, 1)
-        curr_temporal_embeddings = self.temporal_embedding.weight[-1][None].unsqueeze(-1)
-        curr_temporal_embeddings = curr_temporal_embeddings.permute(0, 2, 1)
-
-        # process history queries
-        bs, f, c, w, h = hist_queries.shape
-        history_temporal_embeddings = self.temporal_embedding.weight[0:self.history_frame_number][None].unsqueeze(-1).unsqueeze(-1)
-        hist_queries = hist_queries + history_temporal_embeddings
-        hist_queries = hist_queries.reshape(bs, c * f, w * h).permute(0, 2, 1)
-
-        # add positional encoding
-        bev_queries = bev_queries + bev_pos + curr_temporal_embeddings
-
-        # Low encoder process multi-resolution features
-        bev_w, bev_h = [w], [h]
-        for i in range(len(self.low_encoder.layers)):
-            if i == 0:
-                bev_w.append(w)
-                bev_h.append(h)
-            else:
-                bev_h.append((bev_h[-1] + 1) // 2)
-                bev_w.append((bev_w[-1] + 1) // 2)
-
-        bev_embed, plan_embed = self.low_encoder(
-            bev_queries,
-            hist_queries,
-            plan_queries=plan_queries,
-            bev_w=bev_w,
-            bev_h=bev_h,
-            multi_scale=True,
-            **kwargs
-        )
-        for i in range(len(bev_embed)):
-            # recover to 2d
-            w, h = bev_w[i + 1], bev_h[i + 1]
-            bev_embed[i] = bev_embed[i].reshape(bs, w, h, -1).permute(0, 3, 1, 2)
-
-        bev_embed = self.u_net(bev_embed, bev_w[0], bev_h[0])
-        bev_embed = bev_embed.reshape(bs, c, -1).permute(0, 2, 1)
-
-        # Utilize ego mode to predict future trajectory
-        # plan_output = self.plan_translation_output(plan_embed[-1].squeeze(1)).reshape(bs, -1, 6)
-        # plan_output = plan_output[curr_ego_mode.bool()]
-        # Single ego mode
-        plan_output = self.plan_translation_output(plan_embed[-1].squeeze(1))
+        curr_rotation = curr_info['curr_rotation']
+        curr_translation = curr_info['curr_translation']
+        curr_ego_to_global = curr_info['curr_ego_to_global']
+        curr_to_future_ego_rt = curr_info['curr_to_future_ego_rt']
 
         pred_delta_translation = plan_output[:, :2]
         pred_relative_rotation = plan_output[:, 2:]
@@ -220,26 +160,98 @@ class II_Former(BaseModule):
         targ_curr_to_futu_info = torch.cat([targ_curr_to_futu_rotation, targ_curr_to_futu_translation], dim=-1)
         pred_curr_to_futu_info = torch.cat([pred_curr_to_futu_rotation, pred_curr_to_futu_translation], dim=-1)
 
-        curr_to_futu_info = torch.zeros(bs, 12, device=bev_queries.device, dtype=bev_queries.dtype)
-        if use_gt:
-            curr_to_futu_info[use_gt_rate] = targ_curr_to_futu_info[use_gt_rate]
-            curr_to_futu_info[~use_gt_rate] = pred_curr_to_futu_info[~use_gt_rate]
+        trans_info = dict(
+            pred_curr_to_futu_info=pred_curr_to_futu_info,
+            targ_curr_to_futu_info=targ_curr_to_futu_info,
+            # Predicted transformation matrix
+            pred_delta_translation=pred_delta_translation,
+            pred_next_translation=pred_next_translation,
+            pred_relative_rotation=pred_relative_rotation,
+            pred_next_rotation=pred_next_rotation,
+            pred_next_ego_to_global=pred_next_ego_to_global,
+        )
+        return trans_info
+
+    @force_fp32(apply_to=('mlvl_feats', 'bev_queries', 'prev_bev', 'bev_pos'))
+    def forward(
+            self,
+            curr_info,
+            history_info,
+            plan_queries,
+            **kwargs):
+        """
+        obtain bev features.
+        input bev_queries: [bs, c, w, h]
+        """
+        bev_queries = curr_info['curr_latent']
+        curr_ego_mode = curr_info['curr_ego_mode']
+        hist_queries = history_info['history_token']
+
+        bs, c, w, h = bev_queries.shape
+        dtype = bev_queries.dtype
+
+        # Process current queries
+        bev_queries = bev_queries.reshape(bs, c, w * h).permute(0, 2, 1)  # change to [bs, w*h, c]
+        bev_pos = self.positional_encoding(bs, w, h, bev_queries.device).to(dtype)
+        bev_pos = bev_pos.flatten(2).permute(0, 2, 1)
+        curr_temporal_embeddings = self.temporal_embedding.weight[-1][None].unsqueeze(-1)
+        curr_temporal_embeddings = curr_temporal_embeddings.permute(0, 2, 1)
+
+        # process history queries
+        bs, f, c, w, h = hist_queries.shape
+        history_temporal_embeddings = self.temporal_embedding.weight[0:self.history_frame_number][None].unsqueeze(-1).unsqueeze(-1)
+        hist_queries = hist_queries + history_temporal_embeddings
+        hist_queries = hist_queries.reshape(bs, c * f, w * h).permute(0, 2, 1)
+
+        # add positional encoding
+        bev_queries = bev_queries + bev_pos + curr_temporal_embeddings
+
+        # intra_encoder process multi-resolution features
+        bev_w, bev_h = [w], [h]
+        for i in range(len(self.intra_encoder.layers)):
+            if i == 0:
+                bev_w.append(w)
+                bev_h.append(h)
+            else:
+                bev_h.append((bev_h[-1] + 1) // 2)
+                bev_w.append((bev_w[-1] + 1) // 2)
+
+        bev_embed, plan_embed = self.intra_encoder(
+            bev_queries,
+            hist_queries,
+            plan_queries=plan_queries,
+            bev_w=bev_w,
+            bev_h=bev_h,
+            multi_scale=True,
+            **kwargs
+        )
+        for i in range(len(bev_embed)):
+            # recover to 2d
+            w, h = bev_w[i + 1], bev_h[i + 1]
+            bev_embed[i] = bev_embed[i].reshape(bs, w, h, -1).permute(0, 3, 1, 2)
+
+        bev_embed = self.u_net(bev_embed, bev_w[0], bev_h[0])
+        bev_embed = bev_embed.reshape(bs, c, -1).permute(0, 2, 1)
+
+        # Pred transformation matrix
+        if self.ego_mode == 1:
+            plan_output = self.plan_translation_output(plan_embed[-1].squeeze(1))
         else:
-            curr_to_futu_info = pred_curr_to_futu_info
+            plan_output = self.plan_translation_output(plan_embed[-1].squeeze(1)).reshape(bs, -1, 6)
+            plan_output = plan_output[curr_ego_mode.bool()]
 
-        if train:
-            curr_to_futu_info = targ_curr_to_futu_info
-
-        # curr_to_futu_info = targ_curr_to_futu_info
+        trans_info = self.process_transformation_matrix(bev_queries, curr_info, plan_output)
+        if self.task_mode == 'generate':
+            curr_to_futu_info = trans_info['targ_curr_to_futu_info']
 
         bev_embed = bev_embed + self.plan_embed(curr_to_futu_info).unsqueeze(1)
 
         w, h = bev_w[0], bev_h[0]
         bev_w, bev_h = [], []
-        for i in range(len(self.high_encoder.layers)):
+        for i in range(len(self.inter_decoder.layers)):
             bev_w.append(w)
             bev_h.append(h)
-        bev_embed, _ = self.high_encoder(
+        bev_embed, _ = self.inter_decoder(
             bev_embed,
             hist_queries,
             plan_queries=None,
@@ -251,5 +263,6 @@ class II_Former(BaseModule):
 
         bev_embed = bev_embed.permute(0, 2, 1).reshape(bs, -1, w, h)
 
-        return bev_embed, plan_embed[-1], pred_delta_translation, pred_next_translation, pred_relative_rotation, pred_next_rotation, pred_next_ego_to_global
+        trans_info['pred_latent'] = bev_embed
+        return trans_info
 

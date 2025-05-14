@@ -194,13 +194,9 @@ class NuScenesWorldDataset(Custom3DDataset):
             input_dict['start_of_sequence'] = index == 0 or self.flag[index - 1] != self.flag[index]
 
             if not input_dict['start_of_sequence']:
-                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(
-                    self.data_infos[index], self.data_infos[index - 1],
-                    "ego", "ego"))
+                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index - 1],"ego", "ego"))
             else:
-                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(
-                    self.data_infos[index], self.data_infos[index],
-                    "ego", "ego"))
+                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index],"ego", "ego"))
 
         occ_index = [index]
 

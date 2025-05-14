@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 from mmdet.models import HEADS
 
 from mmcv.runner import BaseModule, force_fp32
@@ -89,19 +90,21 @@ class PoseEncoder(BaseModule):
             embed_dims=128,
             traj_axis=2,
             history_frame_number=5,
-            positional_encoding=None,
-            ortho6d=False,
     ):
         super(PoseEncoder, self).__init__()
 
-        # in_channels = (2+4+3+3) * history_frame_number
-        in_channels = (2+3+3+4)* history_frame_number
-
+        in_channels = (2+3+4)
         self.plan_input = nn.Sequential(
-            nn.Linear(in_channels, embed_dims),
+            nn.Linear(in_channels, embed_dims//2),
             nn.ReLU(True),
-            nn.Linear(embed_dims, embed_dims),
+            nn.Linear(embed_dims//2, embed_dims//2),
         )
+        self.pose_time_embedding = nn.Parameter(
+            torch.zeros(1, history_frame_number, embed_dims//2)
+        )
+        self.plan_encoder = nn.Linear(history_frame_number*embed_dims//2, embed_dims)
+
+        init.trunc_normal_(self.pose_time_embedding, std=0.02)
 
         self.traj_axis = traj_axis
         self.history_frame_number = history_frame_number
@@ -160,7 +163,7 @@ class PoseEncoder(BaseModule):
 
         return curr_to_future.detach().clone().contiguous(), pred_ego_to_global.detach().clone().contiguous(), ego_lcf_feat.clone().detach()
 
-    def get_ego_feat(self, pred_rotation, pred_translation, curr_rotation, curr_translations, start_of_sequence):
+    def get_ego_feat(self, pred_trans_info, curr_info, start_of_sequence):
         """
 
         Args:
@@ -173,6 +176,11 @@ class PoseEncoder(BaseModule):
         Returns:
 
         """
+        pred_rotation = pred_trans_info['pred_next_rotation']
+        pred_translation = pred_trans_info['pred_next_translation']
+        curr_rotation = curr_info['curr_rotation']
+        curr_translation = curr_info['curr_translation']
+
         bs = pred_rotation.shape[0]
 
         _, _, ego_yaw = quart_to_rpy(pred_rotation)
@@ -183,13 +191,13 @@ class PoseEncoder(BaseModule):
         if self.ego_yaw_prev is None:
             _, _, ego_yaw_prev = quart_to_rpy(curr_rotation)
             self.ego_yaw_prev = ego_yaw_prev
-            self.ego_pos_prev = curr_translations
+            self.ego_pos_prev = curr_translation
 
         # Get ego_lcf_feat
         if start_of_sequence.sum() > 0:
             _, _, ego_yaw_prev = quart_to_rpy(curr_rotation)
             self.ego_yaw_prev[start_of_sequence] = ego_yaw_prev[start_of_sequence]
-            self.ego_pos_prev[start_of_sequence] = curr_translations[start_of_sequence]
+            self.ego_pos_prev[start_of_sequence] = curr_translation[start_of_sequence]
 
         ego_lcf_feat = torch.zeros(bs, 3, device=pred_rotation.device, dtype=pred_rotation.dtype)
         ego_w = (ego_yaw - self.ego_yaw_prev) / 0.5
@@ -202,26 +210,26 @@ class PoseEncoder(BaseModule):
         # update ego_yaw_prev and ego_pos_prev
         self.ego_yaw_prev = ego_yaw.clone()
         self.ego_pos_prev = pred_translation.clone()
+        pred_trans_info['pred_ego_lcf_feat'] = ego_lcf_feat.clone().detach()
 
-        return ego_lcf_feat.clone().detach()
+        return pred_trans_info
 
 
     @force_fp32()
-    def forward_encoder(self,
-                        history_delta_translation,
-                        history_relative_rotation,
-                        history_ego_mode,
-                        history_ego_lcf_feat,
-                ):
+    def forward_encoder(self, history_info):
         # Process scene latent
         # current latent: bs, c, w, h
+        history_delta_translation = history_info['history_delta_translation']
+        history_relative_rotation = history_info['history_relative_rotation']
+        history_ego_lcf_feat = history_info['history_ego_lcf_feat']
 
         bs, f = history_delta_translation.shape[0], history_delta_translation.shape[1]
 
-        plan_query = torch.cat([history_delta_translation, history_relative_rotation, history_ego_mode, history_ego_lcf_feat], dim=-1)
-        plan_query = plan_query.reshape(bs, -1)
-
+        plan_query = torch.cat([history_delta_translation, history_relative_rotation, history_ego_lcf_feat], dim=-1)
         plan_query = self.plan_input(plan_query)
+        plan_query = plan_query + self.pose_time_embedding
+        plan_query = plan_query.reshape(bs, -1)
+        plan_query = self.plan_encoder(plan_query)
         plan_query = plan_query.unsqueeze(1)
 
         # plan query : [bs, 1, embed_dims]
