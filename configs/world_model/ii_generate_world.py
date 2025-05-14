@@ -65,7 +65,7 @@ row_num_embed = 50  # latent_height
 col_num_embed = 50  # latent_width
 
 memory_frame_number = 5 # 4 history frames + 1 current frame
-
+task_mode = 'generate'
 model = dict(
     type='II_World',
     previous_frame_exist=True if train_load_previous_frame_number > 0 else False,
@@ -74,6 +74,7 @@ model = dict(
     test_future_frame=test_load_future_frame_number,
     test_previous_frame=test_load_previous_frame_number,
     memory_frame_number=memory_frame_number,
+    task_mode=task_mode,
     test_mode=False,
     feature_similarity_loss=dict(
         type='FeatSimLoss',
@@ -98,6 +99,7 @@ model = dict(
         use_gt_traj=True,
         use_transformation=True,
         history_frame_number=memory_frame_number,
+        task_mode=task_mode,
         low_encoder=dict(
             type='II_FormerEncoder',
             num_layers=3,

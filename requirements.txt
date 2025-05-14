@@ -7,3 +7,4 @@ nuscenes-devkit
 scikit-image
 yapf==0.40.1
 numpy==1.23.5
+tensorboard==2.14.0
