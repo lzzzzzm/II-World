@@ -359,24 +359,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         )
         return output_dict
 
-    # def get_ego_trajs_info(self, index, info):
-    #     # get traj info
-    #     gt_ego_fut_trajs = info['gt_ego_fut_trajs']    # 6,2
-    #     gt_ego_fut_cmd = info['gt_ego_fut_cmd'] # 3
-    #     ego_feat = info['gt_ego_lcf_feat']    # 9
-    #     ego_vx, ego_vy, ego_w = ego_feat[0], ego_feat[1], ego_feat[4]
-    #     gt_ego_lcf_feat = [ego_vx, ego_vy, ego_w]
-    #
-    #     gt_ego_fut_trajs = np.array(gt_ego_fut_trajs)
-    #     gt_ego_fut_cmd = np.array(gt_ego_fut_cmd)
-    #     gt_ego_lcf_feat = np.array(gt_ego_lcf_feat)
-    #     output_dict = dict(
-    #         gt_ego_fut_trajs=gt_ego_fut_trajs,
-    #         gt_ego_fut_cmd=gt_ego_fut_cmd,
-    #         gt_ego_lcf_feat=gt_ego_lcf_feat
-    #     )
-    #     return output_dict
-
     def get_ego_trajs_info(self, index, info):
         # get traj info
         gt_ego_fut_trajs = []

@@ -167,7 +167,6 @@ class II_World(CenterPoint):
                 #
                 self.observe_rotation = trans_infos['ego_to_global_rotation'][:, 0:1].repeat(1, self.observe_frame_number, 1)
                 self.observe_ego_lcf_feat = trans_infos['gt_ego_lcf_feat'][:, 0:1].repeat(1, self.observe_frame_number, 1)
-                self.observe_ego_mode = trans_infos['gt_ego_fut_cmd'][:, 0:1].repeat(1, self.observe_frame_number, 1)
                 # Zero-init
                 self.observe_relative_rotation = torch.ones(bs, self.observe_frame_number, 4, device=latent.device,dtype=torch.float32)
                 self.observe_delta_translation = torch.zeros(bs, self.observe_frame_number, 2, device=latent.device,dtype=torch.float32)
@@ -177,14 +176,12 @@ class II_World(CenterPoint):
                 #
                 self.observe_rotation[start_of_sequence] = trans_infos['ego_to_global_rotation'][start_of_sequence, 0:1].repeat(1,self.observe_frame_number,1)
                 self.observe_ego_lcf_feat[start_of_sequence] = trans_infos['gt_ego_lcf_feat'][start_of_sequence, 0:1].repeat(1,self.observe_frame_number,1)
-                self.observe_ego_mode[start_of_sequence] = trans_infos['gt_ego_fut_cmd'][start_of_sequence, 0:1].repeat(1,self.observe_frame_number,1)
                 # Zero-init
                 self.observe_relative_rotation[start_of_sequence] = torch.ones(start_of_sequence.sum(), self.observe_frame_number, 4, device=latent.device, dtype=torch.float32)
                 self.observe_delta_translation[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 2, device=latent.device, dtype=torch.float32)
                 self.observe_curr_to_futu[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number,4, 4, device=latent.device, dtype=torch.float32)
 
             # update observe information
-            self.observe_ego_mode = torch.cat([self.observe_ego_mode[:, 1:], trans_infos['gt_ego_fut_cmd'][:, 0:1]], dim=1)
             self.observe_rotation = torch.cat([self.observe_rotation[:, 1:], trans_infos['ego_to_global_rotation'][:, 0:1]], dim=1)
             self.observe_ego_lcf_feat = torch.cat([self.observe_ego_lcf_feat[:, 1:], trans_infos['gt_ego_lcf_feat'][:, 0:1]], dim=1)
         else:
@@ -203,6 +200,12 @@ class II_World(CenterPoint):
         history_ego_mode = trans_infos['gt_ego_fut_cmd'][:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
         history_relative_rotation = torch.ones(bs, self.memory_frame_number, 4, device=device, dtype=dtype)
         history_delta_translation = torch.zeros(bs, self.memory_frame_number, 2, device=device, dtype=dtype)
+
+        history_rotation[:, -self.observe_frame_number:] = self.observe_rotation
+        history_relative_rotation[:, -self.observe_frame_number:] = self.observe_relative_rotation
+        history_delta_translation[:, -self.observe_frame_number:] = self.observe_delta_translation
+        history_ego_lcf_feat[:, -self.observe_frame_number:] = self.observe_ego_lcf_feat
+
         history_info = dict(
             history_token=history_token,
             history_rotation=history_rotation,
