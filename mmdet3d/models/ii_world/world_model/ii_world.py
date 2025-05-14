@@ -197,7 +197,6 @@ class II_World(CenterPoint):
         history_token = latent[:, 0:1].repeat(1, self.memory_frame_number, 1, 1, 1).detach().clone()  # bs, f, c, w, h
         history_rotation = trans_infos['ego_to_global_rotation'][:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
         history_ego_lcf_feat = trans_infos['gt_ego_lcf_feat'][:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
-        history_ego_mode = trans_infos['gt_ego_fut_cmd'][:, 0:1].repeat(1, self.memory_frame_number, 1).detach().clone()
         history_relative_rotation = torch.ones(bs, self.memory_frame_number, 4, device=device, dtype=dtype)
         history_delta_translation = torch.zeros(bs, self.memory_frame_number, 2, device=device, dtype=dtype)
 
@@ -210,7 +209,6 @@ class II_World(CenterPoint):
             history_token=history_token,
             history_rotation=history_rotation,
             history_ego_lcf_feat=history_ego_lcf_feat,
-            history_ego_mode=history_ego_mode,
             history_relative_rotation=history_relative_rotation,
             history_delta_translation=history_delta_translation,
         )
