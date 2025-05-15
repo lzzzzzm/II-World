@@ -42,7 +42,7 @@ class IISceneTokenizer(CenterPoint):
                  lovasz_loss=None,
                  focal_loss=None,
                  embed_loss_weight=None,
-                 save_results=True,
+                 save_results=False,
                  **kwargs):
         super(IISceneTokenizer, self).__init__(**kwargs)
         # ---------------------- init params ------------------------------
@@ -197,15 +197,13 @@ class IISceneTokenizer(CenterPoint):
         pred = logits.softmax(-1).argmax(-1).cpu().numpy()
         if self.save_results:
             # z_sampled: [bs, c, h, w]
-            # rel_poses = np.array([img_meta['rel_poses'][0] for img_meta in img_metas])[0]
-            # gt_mode = np.array([img_meta['gt_mode'] for img_meta in img_metas])[0]
-            # save_token = z_sampled[0].cpu().numpy()
-            # mmcv.mkdir_or_exist('data/nuscenes/save_dir/token_4f/{}'.format(img_metas[0]['scene_name']))
-            # np.savez('data/nuscenes/save_dir/token_4f/{}/{}.npz'.format(img_metas[0]['scene_name'], img_metas[0]['sample_idx']),token=save_token)
+            save_token = z_sampled[0].cpu().numpy()
+            mmcv.mkdir_or_exist('data/nuscenes/save_dir/token_4f/{}'.format(img_metas[0]['scene_name']))
+            np.savez('data/nuscenes/save_dir/token_4f/{}/{}.npz'.format(img_metas[0]['scene_name'], img_metas[0]['sample_idx']),token=save_token)
 
             # save pred
-            mmcv.mkdir_or_exist('save_dir/debug/{}'.format(img_metas[0]['scene_name']))
-            np.savez('save_dir/debug/{}/{}.npz'.format(img_metas[0]['scene_name'],img_metas[0]['sample_idx']), semantics=pred[0][0])
+            # mmcv.mkdir_or_exist('save_dir/debug/{}'.format(img_metas[0]['scene_name']))
+            # np.savez('save_dir/debug/{}/{}.npz'.format(img_metas[0]['scene_name'],img_metas[0]['sample_idx']), semantics=pred[0][0])
 
         output_dict['semantics'] = pred.astype(np.uint8)
         output_dict['targ_semantics'] = voxel_semantics.cpu().numpy().astype(np.uint8)
