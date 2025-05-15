@@ -77,13 +77,9 @@ class II_World(CenterPoint):
             self.vqvae = builder.build_detector(vqvae)
 
         # -------- Video Params --------
-        self.observe_rotation = None
         self.observe_relative_rotation = None
         self.observe_delta_translation = None
         self.observe_ego_lcf_feat = None
-        self.observe_ego_mode = None
-        self.observe_curr_to_futu = None
-        self.observe_plan_embed = None
         self.task_mode = task_mode
 
         # -------- Params --------
@@ -106,9 +102,6 @@ class II_World(CenterPoint):
         self.free_cls = 17
         self.save_index = 0
 
-    def init_vqvae(self, vqvae):
-        self.vqvae = builder.build_detector(vqvae)
-
     def obtain_scene_from_token(self, token):
         if token.dim() == 4:
             token = token.unsqueeze(1)
@@ -119,7 +112,6 @@ class II_World(CenterPoint):
         token = token.view(bs * f, c, w, h)
         scene = self.vqvae.forward_decoder(token, decoder_shapes, shapes)
         return scene
-
 
     def load_transformation_info(self, img_metas, latent):
         device, dtype = latent.device, latent.dtype
@@ -164,19 +156,27 @@ class II_World(CenterPoint):
         start_of_sequence = trans_infos['start_of_sequence']
         device, dtype = latent.device, latent.dtype
         if start_update:
-            if self.observe_rotation is None:
+            if self.observe_relative_rotation is None:
                 # Zero-init
-                self.observe_ego_lcf_feat = torch.zeros(bs, self.observe_frame_number, 3, device=device, dtype=dtype)
-                self.observe_relative_rotation = torch.ones(bs, self.observe_frame_number, 4, device=device,dtype=dtype)
-                self.observe_delta_translation = torch.zeros(bs, self.observe_frame_number, 2, device=device,dtype=dtype)
-                self.observe_curr_to_futu = torch.zeros(bs, self.observe_frame_number, 4, 4, device=device, dtype=dtype)
+                self.observe_relative_rotation =\
+                    torch.ones(bs, self.observe_frame_number, 4, device=device,dtype=dtype)
+                self.observe_delta_translation =\
+                    torch.zeros(bs, self.observe_frame_number, 2, device=device,dtype=dtype)
+                self.observe_ego_lcf_feat =\
+                    torch.zeros(bs, self.observe_frame_number, 3, device=device, dtype=dtype)
+                self.observe_curr_to_futu =\
+                    torch.zeros(bs, self.observe_frame_number, 4, 4, device=device, dtype=dtype)
 
             if start_of_sequence.sum() > 0:
                 # Zero-init
-                self.observe_ego_lcf_feat[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 3, device=device, dtype=dtype)
-                self.observe_relative_rotation[start_of_sequence] = torch.ones(start_of_sequence.sum(), self.observe_frame_number, 4, device=device, dtype=dtype)
-                self.observe_delta_translation[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 2, device=device, dtype=dtype)
-                self.observe_curr_to_futu[start_of_sequence] = torch.zeros(start_of_sequence.sum(), self.observe_frame_number,4, 4, device=device, dtype=dtype)
+                self.observe_relative_rotation[start_of_sequence] =\
+                    torch.ones(start_of_sequence.sum(),self.observe_frame_number, 4, device=device, dtype=dtype)
+                self.observe_delta_translation[start_of_sequence] =\
+                    torch.zeros(start_of_sequence.sum(),self.observe_frame_number, 2, device=device, dtype=dtype)
+                self.observe_ego_lcf_feat[start_of_sequence] =\
+                    torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 3, device=device, dtype=dtype)
+                self.observe_curr_to_futu[start_of_sequence] =\
+                    torch.zeros(start_of_sequence.sum(), self.observe_frame_number,4, 4, device=device, dtype=dtype)
 
         else:
             self.observe_delta_translation = torch.cat(
@@ -402,8 +402,8 @@ class II_World(CenterPoint):
                                                                                pred_latents[:, frame_idx],
                                                                                targ_latents[:, frame_idx],
                                                                                valid_frame[:, frame_idx])
-
-        loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
-        loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
+        if self.task_mode == 'generate':
+            loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
+            loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
 
         return loss_dict
