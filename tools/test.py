@@ -158,13 +158,18 @@ def main():
     cfg = compat_cfg(cfg)
     if cfg.model.get('vqvae', None):
         model_checkpoint_name = args.checkpoint.split('/')[-1]
-        tokenizer_ckpt = torch.load(args.scene_checkpoints)['state_dict']
-        model_ckpt = torch.load(args.checkpoint)['state_dict']
+        tokenizer_ckpt = torch.load(args.scene_checkpoints)
+        model_ckpt = torch.load(args.checkpoint)
+        if 'state_dict' in tokenizer_ckpt:
+            tokenizer_ckpt = tokenizer_ckpt['state_dict']
+        if 'state_dict' in model_ckpt:
+            model_ckpt = model_ckpt['state_dict']
+
         for key in tokenizer_ckpt:
             new_key = 'vqvae.' + key
             model_ckpt[new_key] = tokenizer_ckpt[key]
         save_path = f'ckpts/{model_checkpoint_name}'
-        torch.save(model_ckpt, args.checkpoint)
+        torch.save(model_ckpt, save_path)
         args.checkpoint = save_path
 
     # set multi-process settings
