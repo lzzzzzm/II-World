@@ -296,7 +296,7 @@ class II_World(CenterPoint):
         return history_info
 
 
-    def forward_sample(self, latent, img_metas, predict_future_frame, use_gt, train=True, **kwargs):
+    def forward_sample(self, latent, img_metas, predict_future_frame, train=True, **kwargs):
         # latent: [bs, f, c, h, w]
         bs, f, c, h, w = latent.shape
 
@@ -316,6 +316,7 @@ class II_World(CenterPoint):
         for frame_idx in range(predict_future_frame):
             # Decide whether to use GT
             use_gt_rate = torch.rand(size=(bs,), device=latent.device) < self.sample_rate
+
             plan_query = self.pose_encoder.forward_encoder(history_info)
 
             pred_trans_info = self.transformer(
@@ -323,11 +324,13 @@ class II_World(CenterPoint):
                 history_info=history_info,
                 plan_queries=plan_query,
             )
+
             pred_trans_info = self.pose_encoder.get_ego_feat(
                 pred_trans_info=pred_trans_info,
                 curr_info=curr_info,
                 start_of_sequence=trans_infos['start_of_sequence']
             )
+
             if frame_idx != predict_future_frame - 1:
                 # Update current info
                 curr_info = self.update_curr_info(curr_info, trans_infos, pred_trans_info, use_gt_rate, frame_idx, train)
@@ -360,7 +363,7 @@ class II_World(CenterPoint):
         targ_curr_voxel_semantics = voxel_semantics[:, self.test_previous_frame:self.test_previous_frame + 1]
 
         # Autoregressive predict future latent & Forward future latent
-        return_dict = self.forward_sample(latent, img_metas, self.test_future_frame, use_gt=False, train=False)
+        return_dict = self.forward_sample(latent, img_metas, self.test_future_frame, train=False)
         pred_latents = return_dict['pred_latents']
         pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
         pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
@@ -382,7 +385,7 @@ class II_World(CenterPoint):
 
     def forward_train(self, latent, img_metas, **kwargs):
         # Forward auto-regressive prediction
-        return_dict = self.forward_sample(latent, img_metas, self.train_future_frame, use_gt=True, train=True)
+        return_dict = self.forward_sample(latent, img_metas, self.train_future_frame, train=True)
         pred_latents = return_dict['pred_latents']
         targ_latents = latent[:, 1:]  # GT future latent
 
