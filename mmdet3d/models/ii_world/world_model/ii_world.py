@@ -164,8 +164,6 @@ class II_World(CenterPoint):
                     torch.zeros(bs, self.observe_frame_number, 2, device=device,dtype=dtype)
                 self.observe_ego_lcf_feat =\
                     torch.zeros(bs, self.observe_frame_number, 3, device=device, dtype=dtype)
-                self.observe_curr_to_futu =\
-                    torch.zeros(bs, self.observe_frame_number, 4, 4, device=device, dtype=dtype)
 
             if start_of_sequence.sum() > 0:
                 # Zero-init
@@ -175,8 +173,6 @@ class II_World(CenterPoint):
                     torch.zeros(start_of_sequence.sum(),self.observe_frame_number, 2, device=device, dtype=dtype)
                 self.observe_ego_lcf_feat[start_of_sequence] =\
                     torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 3, device=device, dtype=dtype)
-                self.observe_curr_to_futu[start_of_sequence] =\
-                    torch.zeros(start_of_sequence.sum(), self.observe_frame_number,4, 4, device=device, dtype=dtype)
 
         else:
             self.observe_delta_translation = torch.cat(
