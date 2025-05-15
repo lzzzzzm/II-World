@@ -40,6 +40,10 @@ def parse_args():
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--out', help='output result file in pickle format')
     parser.add_argument(
+        '--scene_checkpoints',
+        default='ckpts/ii_scene_tokenizer_4f.pth'
+    )
+    parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
         help='Whether to fuse conv and bn, this will slightly increase'
@@ -152,6 +156,16 @@ def main():
         cfg.merge_from_dict(args.cfg_options)
 
     cfg = compat_cfg(cfg)
+    if cfg.model.get('vqvae', None):
+        model_checkpoint_name = args.checkpoint.split('/')[-1]
+        tokenizer_ckpt = torch.load(args.scene_checkpoints)['state_dict']
+        model_ckpt = torch.load(args.checkpoint)['state_dict']
+        for key in tokenizer_ckpt:
+            new_key = 'vqvae.' + key
+            model_ckpt[new_key] = tokenizer_ckpt[key]
+        save_path = f'ckpts/{model_checkpoint_name}'
+        torch.save(model_ckpt, args.checkpoint)
+        args.checkpoint = save_path
 
     # set multi-process settings
     setup_multi_processes(cfg)
@@ -210,13 +224,16 @@ def main():
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
-    cfg.model.test_mode = True
+    if 'test_mode' in cfg.model:
+        cfg.model.test_mode = True
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
 
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
+
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)
     # old versions did not save class info in checkpoints, this walkaround is
