@@ -113,56 +113,6 @@ class PoseEncoder(BaseModule):
         self.ego_pos_prev = None
         self.ego_width, self.ego_length = 1.85, 4.084
 
-
-    def get_curr_to_futu(self, pred_rotation, pred_delta_translation, curr_rotation, curr_translations,
-                         curr_ego_to_global, start_of_sequence):
-        bs = pred_rotation.shape[0]
-
-        _, _, ego_yaw = quart_to_rpy(pred_rotation)
-
-        # make rotations to quaternion
-        pred_rotation = quaternion_to_rotation_matrix(pred_rotation)
-
-        # Change delta translation to absolute translation
-        pred_translation = torch.zeros(bs, 3, device=pred_rotation.device, dtype=pred_rotation.dtype)
-        pred_translation[:, :2] = pred_delta_translation[:, :2] + curr_translations[:, :2]
-        pred_translation[:, 2] = curr_translations[:, 2]
-
-        # make transformation matrix
-        pred_ego_to_global = torch.zeros(bs, 4, 4, device=pred_rotation.device, dtype=pred_rotation.dtype)
-        pred_ego_to_global[:, :3, :3] = pred_rotation
-        pred_ego_to_global[:, :3, 3] = pred_translation
-        pred_ego_to_global[:, 3, 3] = 1
-
-        # make curr_to_next transformation
-        curr_to_future = pred_ego_to_global.inverse() @ curr_ego_to_global
-        curr_to_future[:, 3, :3] = torch.zeros(bs, 3, device=pred_rotation.device, dtype=pred_rotation.dtype)
-
-        if self.ego_yaw_prev is None:
-            _, _, ego_yaw_prev = quart_to_rpy(curr_rotation)
-            self.ego_yaw_prev = ego_yaw_prev
-            self.ego_pos_prev = curr_translations
-
-        # Get ego_lcf_feat
-        if start_of_sequence.sum() > 0:
-            _, _, ego_yaw_prev = quart_to_rpy(curr_rotation)
-            self.ego_yaw_prev[start_of_sequence] = ego_yaw_prev[start_of_sequence]
-            self.ego_pos_prev[start_of_sequence] = curr_translations[start_of_sequence]
-
-        ego_lcf_feat = torch.zeros(bs, 3, device=pred_rotation.device, dtype=pred_rotation.dtype)
-        ego_w = (ego_yaw - self.ego_yaw_prev) / 0.5
-        ego_v = torch.linalg.norm(pred_translation[:2] - self.ego_pos_prev[:2]) / 0.5
-        ego_vx, ego_vy = ego_v * torch.cos(ego_yaw + torch.pi / 2), ego_v * torch.sin(ego_yaw + torch.pi / 2)
-        ego_lcf_feat[:, 0] = ego_w
-        ego_lcf_feat[:, 1] = ego_vx
-        ego_lcf_feat[:, 2] = ego_vy
-
-        # update ego_yaw_prev and ego_pos_prev
-        self.ego_yaw_prev = ego_yaw.clone()
-        self.ego_pos_prev = pred_translation.clone()
-
-        return curr_to_future.detach().clone().contiguous(), pred_ego_to_global.detach().clone().contiguous(), ego_lcf_feat.clone().detach()
-
     def get_ego_feat(self, pred_trans_info, curr_info, start_of_sequence):
         """
 
