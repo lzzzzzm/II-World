@@ -531,11 +531,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         # filter valid data
         # Occupancy-related
         valid_pred_curr_sems, valid_pred_futu_sems, valid_targ_curr_sems, valid_targ_futu_sems = [], [], [], []
-        # Trajectory-related
-        valid_pred_ego_fut_trajs, valid_targ_ego_fut_trajs = [], []
-        # Trajectory-collsion-related
-        valid_targ_bbox_3d, valid_targ_attr_labels = [], []
-        valid_bev_cost_map = []
         for i, occ_idx in tqdm(enumerate(occ_index)):
             if len(occ_idx) != len(set(occ_idx)):
                 continue
@@ -543,27 +538,12 @@ class NuScenesWorldDataset(Custom3DDataset):
             valid_pred_futu_sems.append(pred_futu_sems[i])
             valid_targ_curr_sems.append(targ_curr_sems[i])
             valid_targ_futu_sems.append(targ_futu_sems[i])
-            if len(pred_ego_fut_trajs) > 0:
-                valid_pred_ego_fut_trajs.append(pred_ego_fut_trajs[i])
-                valid_targ_ego_fut_trajs.append(targ_ego_fut_trajs[i])
-
-            if len(targ_bbox_3d) > 0:
-                valid_targ_bbox_3d.append(targ_bbox_3d[i])
-                valid_targ_attr_labels.append(targ_attr_labels[i])
-
-            if len(bev_cost_map) > 0:
-                valid_bev_cost_map.append(bev_cost_map[i])
 
         # delete invalid data
         pred_curr_sems = valid_pred_curr_sems
         pred_futu_sems = valid_pred_futu_sems
         targ_curr_sems = valid_targ_curr_sems
         targ_futu_sems = valid_targ_futu_sems
-        pred_ego_fut_trajs = valid_pred_ego_fut_trajs
-        targ_ego_fut_trajs = valid_targ_ego_fut_trajs
-        targ_bbox_3d = valid_targ_bbox_3d
-        targ_attr_labels = valid_targ_attr_labels
-        bev_cost_map = valid_bev_cost_map
 
         # evaluate time 0s also means reconstructing the current frame
         eval_dict = dict()
@@ -594,18 +574,14 @@ class NuScenesWorldDataset(Custom3DDataset):
                     self.miou_metric_list[j].add_iou_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
 
         # Create result tabel
-        if len(pred_ego_fut_trajs) > 0 and len(targ_bbox_3d) > 0:
-            table_data = [['Time', 'mIoU', 'IoU', 'Traj L2 Loss', 'Traj Collision', 'Traj Box Collision']]
-        elif len(pred_ego_fut_trajs) > 0:
-            table_data = [['Time', 'mIoU', 'IoU', 'Traj L2 Loss']]
-        else:
-            table_data = [['Time', 'mIoU', 'IoU']]
+        table_data = [['Time', 'mIoU', 'IoU']]
 
         restore_table_data = []
         for i in range(self.load_future_frame_number):
             time = 0.5 * (i + 1)
             if time in self.eval_time:
                 _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
+                print(f'evaluating time {time}s ----------------------')
                 iou = self.miou_metric_list[i].count_iou()
                 restore_table_data.append([f'{time}s', f'{miou:.2f}', f'{iou:.2f}'])
                 eval_dict.update(
@@ -625,267 +601,6 @@ class NuScenesWorldDataset(Custom3DDataset):
                 miou_list.append(miou)
                 iou_list.append(iou)
         restore_table_data.append(['Average', f'{np.mean(miou_list):.2f}', f'{np.mean(iou_list):.2f}'])
-
-        # Evaluate the trajectory
-        if len(pred_ego_fut_trajs) > 0:
-            index = 0
-            pred_ego_fut_trajs = np.array(pred_ego_fut_trajs)
-            targ_ego_fut_trajs = np.array(targ_ego_fut_trajs)
-
-            pred_cum_ego_fut_trajs = np.cumsum(pred_ego_fut_trajs, axis=1)
-            targ_cum_ego_fut_trajs = np.cumsum(targ_ego_fut_trajs, axis=1)
-            pred_len = pred_cum_ego_fut_trajs.shape[0]
-            # calc l2 loss
-            l2_single_loss_list = []
-            for i in range(self.load_future_frame_number):
-                time = 0.5 * (i + 1)
-                if time in self.eval_time:
-                    l2_single_loss_list_time = []
-                    for j in tqdm(range(pred_len)):
-                        l2_single_loss_list_time.append(self.compute_L2(pred_cum_ego_fut_trajs[j, i:i+1], targ_cum_ego_fut_trajs[j, i:i+1]))
-
-                    l2_single_loss = sum(l2_single_loss_list_time) / pred_len
-
-                    l2_single_loss_list.append(l2_single_loss)
-                    eval_dict.update(
-                        {
-                            f'traj_single_l2_loss_time_{time}s': np.around(l2_single_loss, 2),
-                        }
-                    )
-                    restore_table_data[index].append(f'{l2_single_loss:.2f}')
-
-                    index = index + 1
-            average_single_l2_loss = np.mean(l2_single_loss_list)
-            restore_table_data[index].append(f'{average_single_l2_loss:.2f}')
-        
-        # Evaluate the trajectory collision
-        if len(targ_bbox_3d) > 0:
-            index = 0
-            obj_coll_single_time_list = []
-            obj_box_coll_single_time_list = []
-            for i in range(self.load_future_frame_number):
-                time = 0.5 * (i + 1)
-                if time in self.eval_time:
-                    obj_coll_sinlge_list = []
-                    obj_box_coll_sinlge_list = []
-                    for j in tqdm(range(len(targ_bbox_3d))):
-                        segmentation, pedestrian = self.plan_metric.get_label(targ_bbox_3d[j], targ_attr_labels[j][None])
-                        occupancy = np.logical_or(segmentation, pedestrian)
-
-                        obj_coll_single, obj_box_coll_single = self.plan_metric.evaluate_coll(
-                            pred_cum_ego_fut_trajs[j:j + 1, i:i + 1],
-                            targ_cum_ego_fut_trajs[j:j + 1, i:i + 1],
-                            occupancy[:, i:i + 1])
-
-                        obj_coll_sinlge_list.append(obj_coll_single.item())
-                        obj_box_coll_sinlge_list.append(obj_box_coll_single.item())
-
-                    obj_coll_single = np.mean(obj_coll_sinlge_list)
-                    obj_box_coll_single = np.mean(obj_box_coll_sinlge_list)
-
-                    obj_coll_single_time_list.append(obj_coll_single)
-                    obj_box_coll_single_time_list.append(obj_box_coll_single)
-
-                    eval_dict.update(
-                        {
-                            f'obj_coll_single_time_{time}s': obj_coll_single,
-                            f'obj_box_coll_single_time_{time}s': obj_box_coll_single
-                        }
-                    )
-                    restore_table_data[index].append(f'{obj_coll_single * 100:.2f}')
-                    restore_table_data[index].append(f'{obj_box_coll_single * 100:.2f}')
-                    index = index + 1
-            mean_obj_coll_single = np.mean(obj_coll_single_time_list)
-            mean_obj_box_coll_single = np.mean(obj_box_coll_single_time_list)
-            restore_table_data[index].append(f'{mean_obj_coll_single * 100:.2f}')
-            restore_table_data[index].append(f'{mean_obj_box_coll_single * 100:.2f}')
-
-        # Evaluate the trajectory collision
-        if len(bev_cost_map) > 0:
-            index = 0
-            coll_single_time_list = []
-            for i in range(self.load_future_frame_number):
-                time = 0.5 * (i + 1)
-                if time in self.eval_time:
-                    coll_single_list = []
-                    for j in range(len(targ_bbox_3d)):
-                        occupancy = bev_cost_map[j][i]
-
-                        bev_trajs = np.zeros_like(pred_ego_fut_trajs)[0]
-                        bev_trajs[i, 0] = -pred_ego_fut_trajs[j, i, 0] / 0.4 + 100
-                        bev_trajs[i, 1] = pred_ego_fut_trajs[j, i, 1] / 0.4 + 100
-                        bev_trajs = bev_trajs.astype(np.int32)
-                        coll = occupancy[bev_trajs[i, 1], bev_trajs[i, 0]]
-                        coll_single_list.append(coll)
-
-                    coll_single = np.mean(coll_single_list)
-                    coll_single += coll_single_time_list[-1] if len(coll_single_time_list) > 0 else 0
-                    coll_single_time_list.append(coll_single)
-
-                    eval_dict.update(
-                        {
-                            f'coll_time_{time}s': coll_single,
-                        }
-                    )
-                    restore_table_data[index].append(f'{coll_single*100:.2f}')
-                    index = index + 1
-            coll_single_time_list = np.array(coll_single_time_list)
-            mean_coll_single = np.mean(coll_single_time_list)
-
-            restore_table_data[index].append(f'{mean_coll_single*100:.2f}')
-
-        for i in range(len(restore_table_data)):
-            table_data.append(restore_table_data[i])
-
-        table = AsciiTable(table_data)
-        logger.info('Evaluation Results:')
-        logger.info(table.table)
-        return eval_dict
-
-    def simple_evaluate_trajs(self, results, logger=None):
-
-        if logger is None:
-            logger = get_root_logger()
-
-        data_index = []
-        occ_index = []
-        # Trajectory-related
-        pred_ego_fut_trajs, targ_ego_fut_trajs = [], []
-        # Trajectory-collsion-related
-        targ_bbox_3d, targ_attr_labels = [], []
-
-        processed_set = set()
-        for result in results:
-            data_id = result['index']
-            for i, id in enumerate(data_id):
-                if id in processed_set: continue
-                processed_set.add(id)
-                occ_index.append(result['occ_index'][i])
-                data_index.append(id)
-
-                # Trajectory-related
-                if 'pred_ego_fut_trajs' in result:
-                    pred_ego_fut_trajs.append(result['pred_ego_fut_trajs'][i])
-                    targ_ego_fut_trajs.append(result['targ_ego_fut_trajs'][i])
-
-                if 'gt_bboxes_3d' in result:
-                    # only support bs = 1
-                    targ_bbox_3d.append(result['gt_bboxes_3d'])
-                    targ_attr_labels.append(result['gt_attr_labels'])
-
-        # filter valid data
-        # Occupancy-related
-        valid_pred_curr_sems, valid_pred_futu_sems, valid_targ_curr_sems, valid_targ_futu_sems = [], [], [], []
-        # Trajectory-related
-        valid_pred_ego_fut_trajs, valid_targ_ego_fut_trajs = [], []
-        # Trajectory-collsion-related
-        valid_targ_bbox_3d, valid_targ_attr_labels = [], []
-        for i, occ_idx in tqdm(enumerate(occ_index)):
-            if len(occ_idx) != len(set(occ_idx)):
-                continue
-
-            if len(pred_ego_fut_trajs) > 0:
-                valid_pred_ego_fut_trajs.append(pred_ego_fut_trajs[i])
-                valid_targ_ego_fut_trajs.append(targ_ego_fut_trajs[i])
-
-            if len(targ_bbox_3d) > 0:
-                valid_targ_bbox_3d.append(targ_bbox_3d[i])
-                valid_targ_attr_labels.append(targ_attr_labels[i])
-        pred_ego_fut_trajs = valid_pred_ego_fut_trajs
-        targ_ego_fut_trajs = valid_targ_ego_fut_trajs
-        targ_bbox_3d = valid_targ_bbox_3d
-        targ_attr_labels = valid_targ_attr_labels
-
-        # Create result tabel
-        if len(pred_ego_fut_trajs) > 0 and len(targ_bbox_3d) > 0:
-            table_data = [['Time', 'Traj Single L2 Loss', 'Traj L2 loss', 'Obj Single Coll', 'Obj Box Single Coll']]
-
-        eval_dict = dict()
-        restore_table_data = []
-
-        # Evaluate the trajectory
-        if len(pred_ego_fut_trajs) > 0:
-            index = 0
-            pred_ego_fut_trajs = np.array(pred_ego_fut_trajs)
-            targ_ego_fut_trajs = np.array(targ_ego_fut_trajs)
-            pred_cum_ego_fut_trajs = np.cumsum(pred_ego_fut_trajs, axis=1)
-            targ_cum_ego_fut_trajs = np.cumsum(targ_ego_fut_trajs, axis=1)
-            pred_len = pred_cum_ego_fut_trajs.shape[0]
-            # calc l2 loss
-            l2_single_loss_list = []
-            l2_loss_list = []
-            for i in range(self.load_future_frame_number):
-                time = 0.5 * (i + 1)
-                if time in self.eval_time:
-                    l2_single_loss_list_time = []
-                    l2_loss_list_time = []
-                    for j in tqdm(range(pred_len)):
-                        l2_single_loss_list_time.append(
-                            self.compute_L2(pred_cum_ego_fut_trajs[j, i:i + 1], targ_cum_ego_fut_trajs[j, i:i + 1]))
-                        l2_loss_list_time.append(
-                            self.compute_L2(pred_cum_ego_fut_trajs[j, :i + 1], targ_cum_ego_fut_trajs[j, :i + 1])
-                        )
-
-                    l2_single_loss = sum(l2_single_loss_list_time) / pred_len
-                    l2_loss = sum(l2_loss_list_time) / pred_len
-
-                    l2_single_loss_list.append(l2_single_loss)
-                    l2_loss_list.append(l2_loss)
-                    eval_dict.update(
-                        {
-                            f'traj_single_l2_loss_time_{time}s': np.around(l2_single_loss, 2),
-                            f'traj_l2_loss_time_{time}s': np.around(l2_loss, 2),
-                        }
-                    )
-                    restore_table_data.append([f'{time}s' , f'{l2_single_loss:.2f}', f'{l2_loss:.2f}'])
-
-                    index = index + 1
-            average_single_l2_loss = np.mean(l2_single_loss_list)
-            average_l2_loss = np.mean(l2_loss_list)
-            restore_table_data.append(['Average', f'{average_single_l2_loss:.2f}', f'{average_l2_loss:.2f}'])
-
-
-        # Evaluate the trajectory collision
-        if len(targ_bbox_3d) > 0:
-            index = 0
-            obj_coll_single_time_list = []
-            obj_box_coll_single_time_list = []
-            for i in range(self.load_future_frame_number):
-                time = 0.5 * (i + 1)
-                if time in self.eval_time:
-                    obj_coll_sinlge_list = []
-                    obj_box_coll_sinlge_list = []
-                    for j in tqdm(range(len(targ_bbox_3d))):
-                        segmentation, pedestrian = self.plan_metric.get_label(targ_bbox_3d[j].tensor.cpu().numpy(), targ_attr_labels[j][None])
-                        occupancy = np.logical_or(segmentation, pedestrian)
-
-                        obj_coll_single, obj_box_coll_single = self.plan_metric.evaluate_coll(
-                            pred_cum_ego_fut_trajs[j:j + 1, i:i + 1],
-                            targ_cum_ego_fut_trajs[j:j + 1, i:i + 1],
-                            occupancy[:, i:i + 1])
-
-                        obj_coll_sinlge_list.append(obj_coll_single.item())
-                        obj_box_coll_sinlge_list.append(obj_box_coll_single.item())
-
-                    obj_coll_single = np.mean(obj_coll_sinlge_list)
-                    obj_box_coll_single = np.mean(obj_box_coll_sinlge_list)
-
-                    obj_coll_single_time_list.append(obj_coll_single)
-                    obj_box_coll_single_time_list.append(obj_box_coll_single)
-
-                    eval_dict.update(
-                        {
-                            f'obj_coll_single_time_{time}s': obj_coll_single,
-                            f'obj_box_coll_single_time_{time}s': obj_box_coll_single
-                        }
-                    )
-                    restore_table_data[index].append(f'{obj_coll_single * 100:.2f}')
-                    restore_table_data[index].append(f'{obj_box_coll_single * 100:.2f}')
-                    index = index + 1
-            mean_obj_coll_single = np.mean(obj_coll_single_time_list)
-            mean_obj_box_coll_single = np.mean(obj_box_coll_single_time_list)
-            restore_table_data[index].append(f'{mean_obj_coll_single * 100:.2f}')
-            restore_table_data[index].append(f'{mean_obj_box_coll_single * 100:.2f}')
 
         for i in range(len(restore_table_data)):
             table_data.append(restore_table_data[i])

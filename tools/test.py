@@ -165,12 +165,14 @@ def main():
         if 'state_dict' in model_ckpt:
             model_ckpt = model_ckpt['state_dict']
 
-        for key in tokenizer_ckpt:
-            new_key = 'vqvae.' + key
-            model_ckpt[new_key] = tokenizer_ckpt[key]
-        save_path = f'ckpts/{model_checkpoint_name}'
-        torch.save(model_ckpt, save_path)
-        args.checkpoint = save_path
+        # check if the model checkpoint has 'vqvae' prefix
+        if not any(key.startswith('vqvae.') for key in model_ckpt):
+            for key in tokenizer_ckpt:
+                new_key = 'vqvae.' + key
+                model_ckpt[new_key] = tokenizer_ckpt[key]
+            save_path = f'ckpts/{model_checkpoint_name}'
+            torch.save(model_ckpt, save_path)
+            args.checkpoint = save_path
 
     # set multi-process settings
     setup_multi_processes(cfg)
