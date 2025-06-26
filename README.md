@@ -8,11 +8,5 @@ pip install mmcv-full==1.7.0 -f https://download.openmmlab.com/mmcv/dist/cu117/t
 pip install mmdet==2.28.2
 pip install mmsegmentation==0.30.0
 pip install -v -e .
-pip install opencv-python
-pip install einops
-pip install numba
-pip install trimesh
-pip install pyquaternion
-pip install nuscenes-devkit
-pip install skimage
+pip install -r requirements.txt
 ```

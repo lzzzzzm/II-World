@@ -16,7 +16,6 @@ from .occ_metrics import Metric_mIoU
 from terminaltables import AsciiTable
 from nuscenes.utils.geometry_utils import transform_matrix
 from mmdet3d.utils import get_root_logger
-from .plan_metrics import PlanningMetric
 
 from mmdet3d.core.bbox.structures import LiDARInstance3DBoxes, Box3DMode
 
@@ -73,7 +72,6 @@ class WaymoWorldDataset(Custom3DDataset):
         self.dataset_name = dataset_name
         self.eval_metric = eval_metric
         self.eval_time = eval_time
-        self.plan_metric = PlanningMetric()
         self.box_mode_3d = Box3DMode.LIDAR
 
     def _get_pts_filename(self, idx):

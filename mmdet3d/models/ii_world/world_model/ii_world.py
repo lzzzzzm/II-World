@@ -1,4 +1,3 @@
-# Modified from OccWorld
 import random
 import matplotlib.pyplot as plt
 import cv2
@@ -75,6 +74,7 @@ class II_World(CenterPoint):
         self.transformer = build_transformer(transformer)
         if test_mode:
             self.vqvae = builder.build_detector(vqvae)
+        self.test_mode = test_mode
 
         # -------- Video Params --------
         self.observe_relative_rotation = None
@@ -307,7 +307,7 @@ class II_World(CenterPoint):
 
         # ---------------- Autogressive prediction ----------------
         pred_latents = []
-        pred_relative_rotations, pred_delta_translations = [], [],
+        pred_relative_rotations, pred_delta_translations = [], []
 
         for frame_idx in range(predict_future_frame):
             # Decide whether to use GT
@@ -348,29 +348,30 @@ class II_World(CenterPoint):
             targ_delta_translations=trans_infos['ego_to_global_delta_translation'], # [bs, f, 2], GT futuredelta translations
             targ_relative_rotations=trans_infos['ego_to_global_relative_rotation'], # [bs, f, 4], GT future rotations
         )
-
         return return_dict
 
     def forward_test(self, latent, voxel_semantics, img_metas, **kwargs):
-        # Forward current latent
-        pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
-        pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
-        targ_future_voxel_semantics = voxel_semantics[:, self.test_previous_frame + 1:]
-        targ_curr_voxel_semantics = voxel_semantics[:, self.test_previous_frame:self.test_previous_frame + 1]
-
         # Autoregressive predict future latent & Forward future latent
-        return_dict = self.forward_sample(latent, img_metas, self.test_future_frame, train=False)
-        pred_latents = return_dict['pred_latents']
-        pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
-        pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
+        sample_dict = self.forward_sample(latent, img_metas, self.test_future_frame, train=False)
 
         return_dict = dict()
         sample_idx = img_metas[0]['sample_idx']
         # Occupancy prediction
-        return_dict['pred_futu_semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
-        return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
-        return_dict['targ_futu_semantics'] = targ_future_voxel_semantics.cpu().numpy().astype(np.uint8)
-        return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
+        if self.task_mode == 'generate':
+            # Forward current latent
+            pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
+            pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
+            targ_future_voxel_semantics = voxel_semantics[:, self.test_previous_frame + 1:]
+            targ_curr_voxel_semantics = voxel_semantics[:, self.test_previous_frame:self.test_previous_frame + 1]
+
+            pred_latents = sample_dict['pred_latents']
+            pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
+            pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
+
+            return_dict['pred_futu_semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
+            return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
+            return_dict['targ_futu_semantics'] = targ_future_voxel_semantics.cpu().numpy().astype(np.uint8)
+            return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
         # Other information
         return_dict['occ_index'] = [img_meta['occ_index'] for img_meta in img_metas]
@@ -401,8 +402,8 @@ class II_World(CenterPoint):
                                                                                pred_latents[:, frame_idx],
                                                                                targ_latents[:, frame_idx],
                                                                                valid_frame[:, frame_idx])
-        if self.task_mode == 'generate':
-            loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
-            loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
+
+        loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
+        loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
 
         return loss_dict

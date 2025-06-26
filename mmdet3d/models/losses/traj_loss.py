@@ -63,7 +63,7 @@ class TrajLoss(nn.Module):
         frame_loss_weight = self.frame_loss_weight[None].repeat(bs, 1)
 
         traj_loss = torch.sum((pred_trajs - targ_trajs) ** 2, dim=-1) * valid_frame
-        traj_loss = traj_loss * frame_loss_weight
+        traj_loss = traj_loss * frame_loss_weight[:, :f]
         traj_loss = traj_loss * sample_weight
         traj_loss = traj_loss.mean(-1) / bs
 

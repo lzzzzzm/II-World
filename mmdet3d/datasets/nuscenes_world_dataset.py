@@ -16,7 +16,6 @@ from .occ_metrics import Metric_mIoU
 from terminaltables import AsciiTable
 from nuscenes.utils.geometry_utils import transform_matrix
 from mmdet3d.utils import get_root_logger
-from .plan_metrics import PlanningMetric
 
 from mmdet3d.core.bbox.structures import LiDARInstance3DBoxes, Box3DMode
 
@@ -71,7 +70,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         self.dataset_name = dataset_name
         self.eval_metric = eval_metric
         self.eval_time = eval_time
-        self.plan_metric = PlanningMetric()
         self.box_mode_3d = Box3DMode.LIDAR
 
     def _set_sequence_group_flag(self):
@@ -384,12 +382,10 @@ class NuScenesWorldDataset(Custom3DDataset):
         gt_ego_fut_trajs = np.array(gt_ego_fut_trajs)
         gt_ego_fut_cmd = np.array(gt_ego_fut_cmd)
         gt_ego_lcf_feat = np.array(gt_ego_lcf_feat)
-        gt_ego_fut_trajs_ori = info['gt_ego_fut_trajs']
         output_dict = dict(
             gt_ego_fut_trajs=gt_ego_fut_trajs,
             gt_ego_fut_cmd=gt_ego_fut_cmd,
             gt_ego_lcf_feat=gt_ego_lcf_feat,
-            gt_ego_fut_trajs_ori=gt_ego_fut_trajs_ori,
         )
         return output_dict
 
@@ -491,10 +487,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         occ_index = []
         # Occupancy-related
         pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems  = [], [], [], []
-        # Trajectory-related
-        pred_ego_fut_trajs, targ_ego_fut_trajs = [], []
-        # Trajectory-collsion-related
-        targ_bbox_3d, targ_attr_labels, bev_cost_map = [], [], []
 
         processed_set = set()
         for result in results:
@@ -514,19 +506,6 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pred_futu_sems.append(pred_futu_sem)
                 targ_curr_sems.append(targ_curr_sem)
                 targ_futu_sems.append(targ_futu_sem)
-
-                # Trajectory-related
-                if 'pred_ego_fut_trajs' in result:
-                    pred_ego_fut_trajs.append(result['pred_ego_fut_trajs'][i])
-                    targ_ego_fut_trajs.append(result['targ_ego_fut_trajs'][i])
-
-                if 'gt_bboxes_3d' in result:
-                    # only support bs = 1
-                    targ_bbox_3d.append(result['gt_bboxes_3d'])
-                    targ_attr_labels.append(result['gt_attr_labels'])
-
-                if 'bev_cost_map' in result:
-                    bev_cost_map.append(result['bev_cost_map'][i])
 
         # filter valid data
         # Occupancy-related
@@ -615,5 +594,3 @@ class NuScenesWorldDataset(Custom3DDataset):
             return self.evaluate_miou(results, logger=logger)
         elif self.eval_metric == 'forecasting_miou':
             return self.evaluate_forecasting_miou(results, logger=logger)
-        elif self.eval_metric == 'forecasting_traj':
-            return self.simple_evaluate_trajs(results, logger=logger)

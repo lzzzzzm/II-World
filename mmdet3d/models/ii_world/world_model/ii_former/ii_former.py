@@ -1,4 +1,5 @@
 import numpy as np
+from einops import rearrange
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,6 @@ from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
 from mmcv.cnn.bricks.transformer import FFN, build_positional_encoding
 
 from mmdet.models.utils.builder import TRANSFORMER
-
 
 def quaternion_to_rotation_matrix(quaternion):
     # Quterion to Rotation Matrix
