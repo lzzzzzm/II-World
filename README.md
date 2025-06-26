@@ -34,17 +34,14 @@ pip install -r requirements.txt
 
 ## 🤗 Model Zoo
 
-<div class="note" style="background: #f0f7ff; padding: 10px; border-left: 3px solid #4285f4;">
-    <strong>Note:</strong> We utilize 8 RTX4090 GPUs to train our model.
-</div>
+> We utilize 8 RTX4090 GPUs to train our model.
 
-
-|   Setting    |   Dataset   | Rec.mIoU (%) | Rec.IoU (%) |                                                Weights                                                | 
+|    Method    |   Dataset   | Rec.mIoU (%) | Rec.IoU (%) |                                                Weights                                                | 
 |:------------:|:-----------:|:------------:|:-----------:|:-----------------------------------------------------------------------------------------------------:|
 | II-Tokenizer |  Occ3D-nus  |     81.1     |    68.1     | [Google-drive](https://drive.google.com/file/d/1JqFEtU4xbhfiOLWktS6n3PM1Q_CZXLO9/view?usp=drive_link) |
 |  zero-shot   | Occ3D-Waymo |     76.3     |    74.6     |                                                   -                                                   |
 
-|   Setting    | Dataset   | Fore.mIoU (%) | Fore.IoU (%) |                                                Weights                                                | 
+|   Method    | Dataset   | Fore.mIoU (%) | Fore.IoU (%) |                                                Weights                                                | 
 |:------------:|-----------|:-------------:|:------------:|-------------------------------------------------------------------------------------------------------|
 |   II-World   | Occ3D-nus |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing)                                            |
 
