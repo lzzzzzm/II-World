@@ -124,6 +124,13 @@ class LoadStreamOcc3D(object):
             for key in self.waymo_map.keys():
                 map_semantics[curr_semantics == key] = self.waymo_map[key]
             curr_semantics = map_semantics
+        elif self.dataset_type == 'stcocc':
+            for index in range(len(previous_occ_path)):
+                previous_occ_path[index] = previous_occ_path[index].replace('gts', 'stc-results')
+            for index in range(len(future_occ_path)):
+                future_occ_path[index] = future_occ_path[index].replace('gts', 'stc-results')
+            curr_occ_path = curr_occ_path.replace('gts', 'stc-results')
+            curr_semantics = np.load(curr_occ_path)['semantics']
 
         # load previous frame
         previous_semantics = []
