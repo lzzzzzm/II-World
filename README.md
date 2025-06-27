@@ -39,11 +39,13 @@ pip install -r requirements.txt
 |    Method    |   Dataset   | Rec.mIoU (%) | Rec.IoU (%) |                                                Weights                                                | 
 |:------------:|:-----------:|:------------:|:-----------:|:-----------------------------------------------------------------------------------------------------:|
 | II-Tokenizer |  Occ3D-nus  |     81.1     |    68.1     | [Google-drive](https://drive.google.com/file/d/1JqFEtU4xbhfiOLWktS6n3PM1Q_CZXLO9/view?usp=drive_link) |
+| II-Tokenizer | STCOcc-Res  |              |             |                                                   -                                                   |
 |  zero-shot   | Occ3D-Waymo |     76.3     |    74.6     |                                                   -                                                   |
 
-|   Method    | Dataset   | Fore.mIoU (%) | Fore.IoU (%) |                                                Weights                                                | 
-|:------------:|-----------|:-------------:|:------------:|-------------------------------------------------------------------------------------------------------|
-|   II-World   | Occ3D-nus |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing)                                            |
+|  Method  | Dataset    | Fore.mIoU (%) | Fore.IoU (%) |                                              Weights                                               | 
+|:--------:|------------|:-------------:|:------------:|:--------------------------------------------------------------------------------------------------:|
+| II-World | Occ3D-nus  |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing) |
+| II-World | STCOcc-Res |     18.9      |     28.8     |                                                 -                                                  |
 
 
 ## 📦 Prepare Dataset

@@ -104,7 +104,7 @@ _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # | Average | 39.73 | 49.80 |
 # +---------+-------+-------+
 # Dataset Config
-dataset_name = 'occ3d'
+dataset_name = 'waymo-Occ3D'
 eval_metric = 'forecasting_miou'
 
 class_weights = [0.0727, 0.0692, 0.0838, 0.0681, 0.0601, 0.0741, 0.0823, 0.0688, 0.0773, 0.0681, 0.0641, 0.0527, 0.0655, 0.0563, 0.0558, 0.0541, 0.0538, 0.0468] # occ-3d
@@ -142,8 +142,8 @@ train_sequences_split_num = 2
 test_sequences_split_num = 1
 
 # Running Config
-num_gpus = 1
-samples_per_gpu = 2
+num_gpus = 8
+samples_per_gpu = 1
 workers_per_gpu = 0
 total_epoch = 48
 num_iters_per_epoch = int(28130 // (num_gpus * samples_per_gpu)*4.554)      # total samples: 28130
@@ -178,6 +178,7 @@ model = dict(
     memory_frame_number=memory_frame_number,
     task_mode=task_mode,
     test_mode=False,
+    dataset_type='waymo',
     feature_similarity_loss=dict(
         type='FeatSimLoss',
         loss_weight=1.0,
@@ -323,18 +324,18 @@ model = dict(
 )
 
 # Data
-dataset_type = 'NuScenesWorldDataset'
-data_root = 'data/nuscenes/'
+dataset_type = 'WaymoWorldDataset'
+data_root = 'data/waymo/'
 file_client_args = dict(backend='disk')
 
 train_pipeline = [
-    dict(type='LoadStreamLatentToken', data_path='data/nuscenes/save_dir/token_4f'),
+    dict(type='LoadStreamLatentToken', data_path='data/waymo/save_dir/token_4f', dataset_type='waymo'),
     dict(type='Collect3D', keys=['latent'])
 ]
 
 test_pipeline = [
-    dict(type='LoadStreamLatentToken', data_path='data/nuscenes/save_dir/token_4f'),
-    dict(type='LoadStreamOcc3D'),
+    dict(type='LoadStreamLatentToken', data_path='data/waymo/save_dir/token_4f', dataset_type='waymo'),
+    dict(type='LoadStreamOcc3D', dataset_type='waymo'),
     dict(type='Collect3D', keys=['voxel_semantics', 'latent'])
 ]
 
@@ -352,7 +353,11 @@ test_data_config = dict(
     pipeline=test_pipeline,
     load_future_frame_number=test_load_future_frame_number,
     load_previous_frame_number=test_load_previous_frame_number,
-    ann_file=data_root + 'world-nuscenes_infos_val.pkl')
+    ann_file=data_root + 'waymo_infos_val.pkl',
+    pose_file=data_root + 'cam_infos_vali.pkl',
+    split='validation',
+    data_root=data_root,
+)
 
 data = dict(
     samples_per_gpu=samples_per_gpu,
@@ -360,17 +365,16 @@ data = dict(
     test_dataloader=dict(runner_type='IterBasedRunnerEval'),
     train=dict(
         data_root=data_root,
-        ann_file=data_root + 'world-nuscenes_infos_train.pkl',
+        ann_file=data_root + 'waymo_infos_val.pkl',
+        pose_file=data_root + 'cam_infos_vali.pkl',
+        split='validation',
         pipeline=train_pipeline,
         classes=occ_class_names,
         test_mode=False,
         load_future_frame_number=train_load_future_frame_number,
-        load_previous_frame_number=train_load_previous_frame_number,
         # Video Sequence
         sequences_split_num=train_sequences_split_num,
         use_sequence_group_flag=True,
-        # Set BEV Augmentation for the same sequence
-        # bda_aug_conf=bda_aug_conf,
     ),
     val=test_data_config,
     test=test_data_config)
@@ -411,3 +415,4 @@ custom_hooks = [
 ]
 
 revise_keys = None
+# load_from='ckpts/mxworld_pose.pth'

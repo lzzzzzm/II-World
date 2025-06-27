@@ -26,15 +26,22 @@ class LoadStreamLatentToken(object):
     def __init__(self,
                  data_path=None,
                  to_long=False,
+                 dataset_type='occ3d',
                  ):
         self.data_path = data_path
         self.to_long = to_long
+        self.dataset_type = dataset_type
 
     def __call__(self, results):
         # current frame
         sample_idx = results['sample_idx']
         scene_name = results['scene_name']
-        latent_token_path = os.path.join(self.data_path, scene_name, f'{sample_idx}.npz')
+        if self.dataset_type == 'waymo':
+            scene_name = str(scene_name).zfill(3)
+            occ_index = results['occ_path'].split('/')[-1].split('.')[0]
+            latent_token_path = os.path.join(self.data_path, scene_name, f'{occ_index}.npz')
+        else:
+            latent_token_path = os.path.join(self.data_path, str(scene_name), f'{sample_idx}.npz')
         latent_token = np.load(latent_token_path)
         token = latent_token['token'][None]
 
@@ -43,7 +50,12 @@ class LoadStreamLatentToken(object):
         future_frame = len(results['future_occ_path'])
         for frame_idx in range(future_frame):
             future_sample_idx = results['future_occ_path'][frame_idx].split('/')[-1]
-            latent_token_path = os.path.join(self.data_path, scene_name, f'{future_sample_idx}.npz')
+            if self.dataset_type == 'waymo':
+                scene_name = str(scene_name).zfill(3)
+                future_occ_index = results['future_occ_path'][frame_idx].split('/')[-1].split('.')[0]
+                latent_token_path = os.path.join(self.data_path, scene_name, f'{future_occ_index}.npz')
+            else:
+                latent_token_path = os.path.join(self.data_path, str(scene_name), f'{future_sample_idx}.npz')
             latent_token = np.load(latent_token_path)
             future_token = latent_token['token']
             future_tokens.append(future_token)
@@ -135,17 +147,37 @@ class LoadStreamOcc3D(object):
         # load previous frame
         previous_semantics = []
         for path in previous_occ_path:
-            previous_occ_gt_label = os.path.join(path, "labels.npz")
-            previous_occ_label = np.load(previous_occ_gt_label)
-            previous_semantic = previous_occ_label['semantics']
+            if self.dataset_type == 'waymo':
+                previous_occ_gt_label = path
+                previous_occ_label = np.load(previous_occ_gt_label)
+                previous_semantic = previous_occ_label['voxel_label']
+                # map the waymo cls to occ3d cls
+                map_semantics = copy.deepcopy(previous_semantic)
+                for key in self.waymo_map.keys():
+                    map_semantics[previous_semantic == key] = self.waymo_map[key]
+                previous_semantic = map_semantics
+            else:
+                previous_occ_gt_label = os.path.join(path, "labels.npz")
+                previous_occ_label = np.load(previous_occ_gt_label)
+                previous_semantic = previous_occ_label['semantics']
             previous_semantics.append(previous_semantic)
 
         # load future frame
         future_semantics = []
         for path in future_occ_path:
-            future_occ_gt_label = os.path.join(path, "labels.npz")
-            future_occ_label = np.load(future_occ_gt_label)
-            future_semantic = future_occ_label['semantics']
+            if self.dataset_type == 'waymo':
+                future_occ_gt_label = path
+                future_occ_label = np.load(future_occ_gt_label)
+                future_semantic = future_occ_label['voxel_label']
+                # map the waymo cls to occ3d cls
+                map_semantics = copy.deepcopy(future_semantic)
+                for key in self.waymo_map.keys():
+                    map_semantics[future_semantic == key] = self.waymo_map[key]
+                future_semantic = map_semantics
+            else:
+                future_occ_gt_label = os.path.join(path, "labels.npz")
+                future_occ_label = np.load(future_occ_gt_label)
+                future_semantic = future_occ_label['semantics']
             future_semantics.append(future_semantic)
 
         occ_semantics = previous_semantics + [curr_semantics] + future_semantics

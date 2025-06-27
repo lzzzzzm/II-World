@@ -145,12 +145,19 @@ class WaymoWorldDataset(Custom3DDataset):
             seq_name = basename[1:4]
             frame_name = basename[4:7]
             occ_path = os.path.join(self.root_split, seq_name,  '{}_04.npz'.format(frame_name))
+            occ_path = occ_path.replace('\\', '/')
             info['occ_path'] = occ_path
 
             # Get pose info
             pose_info = self.pose_info[scene_idx][frame_idx]
             info['ego2global'] = pose_info[0]['ego2global']
             info['global2ego'] = np.linalg.inv(pose_info[0]['ego2global'])
+
+            ego2global_rotation = pyquaternion.Quaternion(matrix=pose_info[0]['ego2global'][:3, :3]).q
+            ego2global_translation = pose_info[0]['ego2global'][:3, 3]
+            info['ego2global_rotation'] = ego2global_rotation
+            info['ego2global_translation'] = ego2global_translation
+
 
         # Set prev characteristics
         prev = None
@@ -214,13 +221,127 @@ class WaymoWorldDataset(Custom3DDataset):
                 input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(curr_to_prev_ego_rt)
 
         occ_index = [index]
-        input_dict['previous_occ_path'] = []
-        input_dict['future_occ_path'] = []
+
+        # Load previous frame info
+        input_dict.update(self.load_previous_frame_info(index, info))
+
+        # Load future frame info
+        input_dict.update(self.load_future_frame_info(index, info))
 
         # Update occ_index
         input_dict['occ_index'] =  occ_index
         return input_dict
 
+    def load_future_frame_info(self, index, info):
+        future_occ_path = []                # list of future occupancy path
+        future_occ_index = []               # list of future occupancy index
+        curr_to_future_ego_rt = []          # list of transformation from current frame to future frame, calc by ego2global_t+1.inverse @ ego2global_t
+        curr_ego_to_global_rt = []          # list of transformation from ego to global, store from current frame to future frame
+        ego_to_global_rotation = []         # list of ego to global rotation, store the quaternion for training
+        ego_to_global_translation = []      # list of ego to global translation, store the translation for training
+
+
+        last_future_info = copy.deepcopy(info)
+        last_future_index = index
+
+        # init current frame information
+        curr_ego_to_global_rt.append(info['ego2global'])
+        ego_to_global_rotation.append(info['ego2global_rotation'])
+        ego_to_global_translation.append(info['ego2global_translation'])
+
+        valid_frame = np.ones(self.load_future_frame_number, dtype=np.bool)
+        for i in range(self.load_future_frame_number):
+            future_index = min(index + i + 1, len(self.data_infos) - 1)
+            # check the future frame is in the same sequence
+            future_info = self.data_infos[future_index]
+            if future_info['prev'] == last_future_info['frame_idx']:    # check the future frame is in the same sequence
+                future_occ_path.append(future_info['occ_path'])
+                future_occ_index.append(future_index)
+                # get the transformation from current frame to previous frame
+                future_prev_info = self.data_infos[max(future_index - 1, 0)]
+
+                if future_prev_info['frame_idx'] == future_info['prev']:
+                    curr_ego_to_global = future_prev_info['ego2global']
+                    futu_global_to_ego = future_info['global2ego']
+                    curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+
+                else:
+                    curr_ego_to_global = future_info['ego2global']
+                    futu_global_to_ego = future_info['global2ego']
+                    curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+                curr_to_future_ego_rt.append(curr_to_future_ego)
+
+                # get ego_to_global
+                ego_to_global = future_info['ego2global']
+                curr_ego_to_global_rt.append(ego_to_global)
+                ego_to_global_rotation.append(future_info['ego2global_rotation'])
+                ego_to_global_translation.append(future_info['ego2global_translation'])
+
+                # update the last future info
+                last_future_info = copy.deepcopy(future_info)
+                last_future_index = copy.deepcopy(future_index)
+            else:
+                future_occ_path.append(last_future_info['occ_path'])
+                future_occ_index.append(last_future_index)
+
+                # get the transformation from current frame to previous frame
+                curr_ego_to_global = last_future_info['ego2global']
+                futu_global_to_ego = last_future_info['global2ego']
+                curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+                curr_to_future_ego_rt.append(curr_to_future_ego)
+
+                # get ego_to_global
+                ego_to_global = last_future_info['ego2global']
+                curr_ego_to_global_rt.append(ego_to_global)
+                ego_to_global_rotation.append(last_future_info['ego2global_rotation'])
+                ego_to_global_translation.append(last_future_info['ego2global_translation'])
+
+                valid_frame[i:] = False
+
+        output_dict = dict(
+            future_occ_path=future_occ_path,
+            future_occ_index=future_occ_index,
+            curr_to_future_ego_rt=np.array(curr_to_future_ego_rt),
+            curr_ego_to_global=np.array(curr_ego_to_global_rt),
+            ego_to_global_rotation=np.array(ego_to_global_rotation),
+            ego_to_global_translation=np.array(ego_to_global_translation),
+            valid_frame=valid_frame,
+        )
+        return output_dict
+
+
+    def load_previous_frame_info(self, index, info):
+        previous_occ_path = []                      # list of previous occupancy path
+        previous_occ_index = []                     # list of previous occupancy index
+        last_previous_info = copy.deepcopy(info)
+        last_previous_index = index
+        for i in range(self.load_previous_frame_number):
+            previous_index = max(index - i - 1, 0)
+            # check the previous frame is in the same sequence
+            previous_info = self.data_infos[previous_index]
+
+            if previous_info['frame_idx'] == last_previous_info['prev']:
+                previous_occ_index.append(previous_index)
+                if self.load_previous_data:
+                    previous_occ_path.append(previous_info['occ_path'])
+
+                # get the transformation from current frame to previous frame
+                prev_prev_info = self.data_infos[max(previous_index - 1, 0)]
+
+                # update the last previous info
+                last_previous_info = copy.deepcopy(previous_info)
+                last_previous_index = copy.deepcopy(previous_index)
+            else:
+                if self.load_previous_data:
+                    previous_occ_path.append(last_previous_info['occ_path'])
+
+                previous_occ_index.append(last_previous_index)
+
+        output_dict = dict(
+            previous_occ_path=list(reversed(previous_occ_path)),
+            previous_occ_index=list(reversed(previous_occ_index))
+        )
+        return output_dict
 
     def evaluate_miou(self, results, logger=None):
         pred_sems, gt_sems = [], []
@@ -266,6 +387,127 @@ class WaymoWorldDataset(Custom3DDataset):
         }
         return eval_dict
 
+    def evaluate_forecasting_miou(self, results, logger):
+        if logger is None:
+            logger = get_root_logger()
+
+        print('\nStarting Evaluation...')
+        num_classes = 17 if self.dataset_name == 'openocc' else 18
+        self.miou_metric_list = []
+        for i in range(self.load_future_frame_number):
+            self.miou_metric_list.append(
+                Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
+            )
+        self.curr_miou_metric = Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
+
+        data_index = []
+        occ_index = []
+        # Occupancy-related
+        pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems  = [], [], [], []
+
+        processed_set = set()
+        for result in results:
+            data_id = result['index']
+            for i, id in enumerate(data_id):
+                if id in processed_set: continue
+                processed_set.add(id)
+                # Occupancy-related
+                pred_curr_sem = result['pred_curr_semantics'][i]
+                pred_futu_sem = result['pred_futu_semantics'][i]
+                targ_curr_sem = result['targ_curr_semantics'][i]
+                targ_futu_sem = result['targ_futu_semantics'][i]
+
+                occ_index.append(result['occ_index'][i])
+                data_index.append(id)
+                pred_curr_sems.append(pred_curr_sem)
+                pred_futu_sems.append(pred_futu_sem)
+                targ_curr_sems.append(targ_curr_sem)
+                targ_futu_sems.append(targ_futu_sem)
+
+        # filter valid data
+        # Occupancy-related
+        valid_pred_curr_sems, valid_pred_futu_sems, valid_targ_curr_sems, valid_targ_futu_sems = [], [], [], []
+        for i, occ_idx in tqdm(enumerate(occ_index)):
+            if len(occ_idx) != len(set(occ_idx)):
+                continue
+            valid_pred_curr_sems.append(pred_curr_sems[i])
+            valid_pred_futu_sems.append(pred_futu_sems[i])
+            valid_targ_curr_sems.append(targ_curr_sems[i])
+            valid_targ_futu_sems.append(targ_futu_sems[i])
+
+        # delete invalid data
+        pred_curr_sems = valid_pred_curr_sems
+        pred_futu_sems = valid_pred_futu_sems
+        targ_curr_sems = valid_targ_curr_sems
+        targ_futu_sems = valid_targ_futu_sems
+
+        # evaluate time 0s also means reconstructing the current frame
+        eval_dict = dict()
+        if 0 in self.eval_time:
+            for i in tqdm(range(len(pred_curr_sems))):
+                pred_curr_sem = pred_curr_sems[i][0]
+                targ_curr_sem = targ_curr_sems[i][0]
+                self.curr_miou_metric.add_batch(pred_curr_sem, targ_curr_sem, None, None)
+                self.curr_miou_metric.add_iou_batch(pred_curr_sem, targ_curr_sem, None, None)
+            print(f'evaluating time {0}s ----------------------')
+            _, miou, _, _, _ = self.curr_miou_metric.count_miou()
+            iou = self.curr_miou_metric.count_iou()
+            eval_dict.update(
+                {
+                    f'semantics_miou_time_{0}s': miou,
+                    f'binary_iou_time_{0}s': iou
+                }
+            )
+
+        # evaluate future frames
+        for i in tqdm(range(len(pred_futu_sems))):
+            pred_futu_sem = pred_futu_sems[i]
+            targ_futu_sem = targ_futu_sems[i]
+            for j in range(pred_futu_sem.shape[0]):
+                time = 0.5 * (j + 1)
+                if time in self.eval_time:
+                    self.miou_metric_list[j].add_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
+                    self.miou_metric_list[j].add_iou_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
+
+        # Create result tabel
+        table_data = [['Time', 'mIoU', 'IoU']]
+
+        restore_table_data = []
+        for i in range(self.load_future_frame_number):
+            time = 0.5 * (i + 1)
+            if time in self.eval_time:
+                _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
+                print(f'evaluating time {time}s ----------------------')
+                iou = self.miou_metric_list[i].count_iou()
+                restore_table_data.append([f'{time}s', f'{miou:.2f}', f'{iou:.2f}'])
+                eval_dict.update(
+                    {
+                        f'semantics_miou_time_{time}s': miou,
+                        f'binary_iou_time_{time}s': iou
+                    }
+                )
+        # calc the average
+        miou_list = []
+        iou_list = []
+        for i in range(self.load_future_frame_number):
+            time = 0.5 * (i + 1)
+            if time in self.eval_time:
+                _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
+                iou = self.miou_metric_list[i].count_iou()
+                miou_list.append(miou)
+                iou_list.append(iou)
+        restore_table_data.append(['Average', f'{np.mean(miou_list):.2f}', f'{np.mean(iou_list):.2f}'])
+
+        for i in range(len(restore_table_data)):
+            table_data.append(restore_table_data[i])
+
+        table = AsciiTable(table_data)
+        logger.info('Evaluation Results:')
+        logger.info(table.table)
+        return eval_dict
+
     def evaluate(self, results, logger=None, runner=None, show_dir=None, **eval_kwargs):
         if self.eval_metric == 'miou':
             return self.evaluate_miou(results, logger=logger)
+        elif self.eval_metric == 'forecasting_miou':
+            return self.evaluate_forecasting_miou(results, logger=logger)

@@ -67,6 +67,7 @@ class II_World(CenterPoint):
                  rotation_loss=None,
                  test_mode=False,
                  task_mode='generate',
+                 dataset_type='occ3d',
                  **kwargs):
         super(II_World, self).__init__(**kwargs)
         # -------- Model Module --------
@@ -91,6 +92,7 @@ class II_World(CenterPoint):
         self.observe_frame_number = observe_frame_number + 1  # 2s+current frame default
         self.memory_frame_number = memory_frame_number
         self.sample_rate = sample_rate
+        self.dataset_type = dataset_type
 
         # -------- Loss -----------
         self.feature_similarity_loss = builder.build_loss(feature_similarity_loss)
@@ -130,10 +132,17 @@ class II_World(CenterPoint):
         # Compute relative rotation
         ego_to_global_relative_rotation = compute_relative_rotation(ego_to_global_rotation)
 
-        gt_ego_lcf_feat = torch.stack(
-            [torch.tensor(img_meta['gt_ego_lcf_feat'], device=device, dtype=dtype) for img_meta in img_metas])
-        gt_ego_fut_cmd = torch.stack(
-            [torch.tensor(img_meta['gt_ego_fut_cmd'], device=device, dtype=dtype) for img_meta in img_metas])
+        if self.dataset_type == 'waymo':
+            # use fake gt_ego_lcf_feat and gt_ego_fut_cmd
+            future_number = curr_to_future_ego_rt.shape[1]
+            gt_ego_lcf_feat = torch.zeros((curr_to_future_ego_rt.shape[0], future_number, 3), device=device, dtype=dtype)
+            gt_ego_fut_cmd = torch.zeros((curr_to_future_ego_rt.shape[0], future_number, 3), dtype=dtype, device=device)
+            gt_ego_fut_cmd[..., 0] = 1
+        else:
+            gt_ego_lcf_feat = torch.stack(
+                [torch.tensor(img_meta['gt_ego_lcf_feat'], device=device, dtype=dtype) for img_meta in img_metas])
+            gt_ego_fut_cmd = torch.stack(
+                [torch.tensor(img_meta['gt_ego_fut_cmd'], device=device, dtype=dtype) for img_meta in img_metas])
         start_of_sequence = torch.stack(
             [torch.tensor(img_meta['start_of_sequence'], device=device) for img_meta in img_metas])
 

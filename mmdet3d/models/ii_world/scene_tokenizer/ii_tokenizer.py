@@ -1,4 +1,6 @@
 # Modified from OccWorld
+import os.path
+
 import cv2
 import copy
 import time
@@ -42,7 +44,8 @@ class IISceneTokenizer(CenterPoint):
                  lovasz_loss=None,
                  focal_loss=None,
                  embed_loss_weight=None,
-                 save_results=False,
+                 save_results=True,
+                 results_type='occ3d',
                  **kwargs):
         super(IISceneTokenizer, self).__init__(**kwargs)
         # ---------------------- init params ------------------------------
@@ -66,7 +69,16 @@ class IISceneTokenizer(CenterPoint):
         # Others
         self.save_results = save_results
         if self.save_results:
-            mmcv.mkdir_or_exist('data/nuscenes/save_dir')
+            if results_type == 'occ3d':
+                self.save_root = 'data/occ3d/save_dir'
+                mmcv.mkdir_or_exist('data/nuscenes/save_dir')
+            elif results_type == 'waymo':
+                self.save_root = 'data/waymo/save_dir'
+                mmcv.mkdir_or_exist('data/waymo/save_dir')
+            elif results_type == 'stcocc':
+                self.save_root = 'data/nuscenes/save_dir_stc'
+                mmcv.mkdir_or_exist('data/nuscenes/save_dir_stc')
+        self.results_type = results_type
         # Losses
         self.empty_idx = empty_idx
         self.use_class_weights = use_class_weights
@@ -198,8 +210,13 @@ class IISceneTokenizer(CenterPoint):
         if self.save_results:
             # z_sampled: [bs, c, h, w]
             save_token = z_sampled[0].cpu().numpy()
-            mmcv.mkdir_or_exist('data/nuscenes/save_dir/token_4f/{}'.format(img_metas[0]['scene_name']))
-            np.savez('data/nuscenes/save_dir/token_4f/{}/{}.npz'.format(img_metas[0]['scene_name'], img_metas[0]['sample_idx']),token=save_token)
+            if self.results_type != 'waymo':
+                mmcv.mkdir_or_exist(os.path.join(self.save_root, 'token_4f', str(img_metas[0]['scene_name'])))
+                np.savez(os.path.join(self.save_root, 'token_4f', str(img_metas[0]['scene_name']), '{}.npz'.format(img_metas[0]['sample_idx'])), token=save_token)
+            else:
+                occ_path_idx = img_metas[0]['occ_path'].split('/')[-1].split('.')[0]
+                mmcv.mkdir_or_exist(os.path.join(self.save_root, 'token_4f', str(img_metas[0]['scene_name']).zfill(3)))
+                np.savez(os.path.join(self.save_root, 'token_4f', str(img_metas[0]['scene_name']).zfill(3), '{}.npz'.format(occ_path_idx)), token=save_token)
 
             # save pred
             # mmcv.mkdir_or_exist('save_dir/debug/{}'.format(img_metas[0]['scene_name']))

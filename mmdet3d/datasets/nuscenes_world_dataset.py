@@ -39,7 +39,7 @@ class NuScenesWorldDataset(Custom3DDataset):
                  # BEVAug
                  bda_aug_conf=None,
                  #
-                 dataset_name='openocc',
+                 dataset_name='occ3d',
                  eval_metric='miou',
                  eval_time=(0, 1, 2, 3),
                  **kwargs
@@ -109,12 +109,6 @@ class NuScenesWorldDataset(Custom3DDataset):
                 assert len(np.bincount(new_flags)) == len(np.bincount(self.flag)) * self.sequences_split_num
                 self.flag = np.array(new_flags, dtype=np.int64)
 
-    def traj_lidar2ego(self, traj, info):
-        lidar2ego = transform_matrix(info['lidar2ego_translation'], pyquaternion.Quaternion(info['lidar2ego_rotation']))
-        traj = np.concatenate([traj, np.ones((traj.shape[0], 1))], axis=1)
-        traj = np.concatenate([traj, np.ones((traj.shape[0], 1))], axis=1)
-        traj = np.dot(lidar2ego, traj.T).T
-        return traj[:, :2]
 
     def compute_L2(self, trajs, gt_trajs):
         '''

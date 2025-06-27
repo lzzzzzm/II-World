@@ -136,7 +136,7 @@ class Collect3D(object):
                    'depth2img', 'sample_idx',
                    'pts_filename', 'trans_mat', 'index',
                    'sequence_group_idx', 'curr_to_prev_lidar_rt', 'curr_to_prev_ego_rt',
-                   'start_of_sequence','can_bus', 'bda_mat', 'scene_name', 'occ_index', 'future_curr_to_prev_ego_rt',
+                   'start_of_sequence','can_bus', 'bda_mat', 'scene_name', 'occ_index', 'future_curr_to_prev_ego_rt', 'occ_path',
                    'previous_curr_to_prev_ego_rt', 'rel_poses', 'gt_mode', 'curr_to_future_ego_rt',
                    'gt_ego_fut_trajs', 'gt_ego_fut_cmd', 'gt_ego_fut_masks', 'curr_ego_to_global', 'gt_ego_lcf_feat', 'valid_frame', 'ego_to_global_rotation',
                    'ego_to_global_translation', 'ego_from_sensor', 'lidar2ego_rotation', 'lidar2ego_translation', 'lidar2ego_rt', 'pose_mat', 'ego2global_translation', 'global2ego_rotation',
