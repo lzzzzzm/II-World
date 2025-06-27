@@ -70,7 +70,7 @@ class IISceneTokenizer(CenterPoint):
         self.save_results = save_results
         if self.save_results:
             if results_type == 'occ3d':
-                self.save_root = 'data/occ3d/save_dir'
+                self.save_root = 'data/nuscenes/save_dir'
                 mmcv.mkdir_or_exist('data/nuscenes/save_dir')
             elif results_type == 'waymo':
                 self.save_root = 'data/waymo/save_dir'
