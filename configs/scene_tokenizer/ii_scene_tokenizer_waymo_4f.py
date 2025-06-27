@@ -61,7 +61,7 @@ test_sequences_split_num = 1
 # Running Config
 num_gpus = 8
 samples_per_gpu = 8
-workers_per_gpu = 0
+workers_per_gpu = 4
 total_epoch = 24
 num_iters_per_epoch = int(28130 // (num_gpus * samples_per_gpu)*4.554)      # total samples: 28130
 
@@ -85,6 +85,7 @@ model = dict(
     frame_number=frame_number,
     vq_channel=base_channel * 2,
     grid_config=grid_config,
+    results_type='waymo',
     encoder=dict(
         type='Encoder2D',
         ch = base_channel,
