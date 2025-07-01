@@ -37,17 +37,14 @@ pip install -r requirements.txt
 
 > We utilize 8 RTX4090 GPUs to train our model.
 
-|    Method    |   Dataset   | Rec.mIoU (%) | Rec.IoU (%) |                                                Weights                                                | 
-|:------------:|:-----------:|:------------:|:-----------:|:-----------------------------------------------------------------------------------------------------:|
-| II-Tokenizer |  Occ3D-nus  |     81.1     |    68.1     | [Google-drive](https://drive.google.com/file/d/1JqFEtU4xbhfiOLWktS6n3PM1Q_CZXLO9/view?usp=drive_link) |
-| II-Tokenizer | STCOcc-Res  |              |             |                                                   -                                                   |
-|  zero-shot   | Occ3D-Waymo |     76.3     |    74.6     |                                                   -                                                   |
-
-|  Method  |       Dataset        | Fore.mIoU (%) | Fore.IoU (%) |                                              Weights                                               | 
-|:--------:|:--------------------:|:-------------:|:------------:|:--------------------------------------------------------------------------------------------------:|
-| II-World |      Occ3D-nus       |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing) |
-| II-World |      STCOcc-Res      |     18.9      |     28.8     |                                                 -                                                  |
-| II-World |     Occ3D-Waymo      |     43.7      |     60.9     |                                                 -                                                  |
+|    Method    |   Dataset   | Task | Rec.mIoU (%) | Rec.IoU (%) |                                                Weights                                                | 
+|:------------:|:-----------:|:----:|:------------:|:-----------:|:-----------------------------------------------------------------------------------------------------:|
+| II-Tokenizer |  Occ3D-nus  | Rec  |     81.1     |    68.1     | [Google-drive](https://drive.google.com/file/d/1JqFEtU4xbhfiOLWktS6n3PM1Q_CZXLO9/view?usp=drive_link) |
+|              | STCOcc-Res  | Rec  |     24.8     |    32.2     |                                                   -                                                   |
+|              | Occ3D-Waymo | Rec  |     76.3     |    74.6     |                                                   -                                                   |
+|   II-World   |  Occ3D-nus  | Fore |     38.4     |    49.2     |  [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing)   |
+|              | STCOcc-Res  | Fore |     18.9     |    28.8     |                                                   -                                                   |
+|              | Occ3D-Waymo | Fore |     43.7     |    60.9     |                                                   -                                                   |
 
 
 ## 📦 Prepare Dataset
