@@ -14,7 +14,8 @@
 Install Pytorch 1.13 + CUDA 11.6
 
 ```setup
-conda create --name stcocc python=3.8
+conda create --name ii-world python=3.8
+conda activate ii-world
 pip install torch==1.13.0+cu116 torchvision==0.14.0+cu116 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu116
 ```
 
@@ -42,10 +43,11 @@ pip install -r requirements.txt
 | II-Tokenizer | STCOcc-Res  |              |             |                                                   -                                                   |
 |  zero-shot   | Occ3D-Waymo |     76.3     |    74.6     |                                                   -                                                   |
 
-|  Method  | Dataset    | Fore.mIoU (%) | Fore.IoU (%) |                                              Weights                                               | 
-|:--------:|------------|:-------------:|:------------:|:--------------------------------------------------------------------------------------------------:|
-| II-World | Occ3D-nus  |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing) |
-| II-World | STCOcc-Res |     18.9      |     28.8     |                                                 -                                                  |
+|  Method  |       Dataset        | Fore.mIoU (%) | Fore.IoU (%) |                                              Weights                                               | 
+|:--------:|:--------------------:|:-------------:|:------------:|:--------------------------------------------------------------------------------------------------:|
+| II-World |      Occ3D-nus       |     38.4      |     49.2     | [Google-drive](https://drive.google.com/file/d/11qFkO-lpdFdfd443eospIRPii9QGSzFD/view?usp=sharing) |
+| II-World |      STCOcc-Res      |     18.9      |     28.8     |                                                 -                                                  |
+| II-World |     Occ3D-Waymo      |     43.7      |     60.9     |                                                 -                                                  |
 
 
 ## 📦 Prepare Dataset
