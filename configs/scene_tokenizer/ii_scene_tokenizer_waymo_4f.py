@@ -27,6 +27,7 @@ _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Dataset Config
 dataset_name = 'waymo-Occ3D'
 eval_metric = 'miou'
+load_interval = 5
 
 class_weights = [0.0727, 0.0692, 0.0838, 0.0681, 0.0601, 0.0741, 0.0823, 0.0688, 0.0773, 0.0681, 0.0641, 0.0527, 0.0655, 0.0563, 0.0558, 0.0541, 0.0538, 0.0468] # occ-3d
 
@@ -153,6 +154,7 @@ share_data_config = dict(
     # Eval Config
     dataset_name=dataset_name,
     eval_metric=eval_metric,
+    load_interval=load_interval,
 )
 
 test_data_config = dict(
