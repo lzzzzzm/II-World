@@ -20,19 +20,15 @@ import time
 
 def compute_relative_rotation(ego_to_global_rotation):
     """
-    将绝对旋转转换为相对旋转。
-    :param ego_to_global_rotation: 形状为 [bs, f, 4] 的四元数张量
-    :return: 形状为 [bs, f-1, 4] 的相对旋转张量
+    :param ego_to_global_rotation: [bs, f, 4]
+    :return: [bs, f-1, 4]
     """
-    # 取出当前帧和前一帧的四元数
-    current = ego_to_global_rotation[:, 1:, :]  # 从第2帧开始
-    previous = ego_to_global_rotation[:, :-1, :]  # 到倒数第2帧结束
+    current = ego_to_global_rotation[:, 1:, :]
+    previous = ego_to_global_rotation[:, :-1, :]
 
-    # 计算前一帧的共轭（单位四元数的逆）
     previous_conjugate = previous.clone()
-    previous_conjugate[:, :, 1:] *= -1  # 取负号 (x, y, z 分量)
+    previous_conjugate[:, :, 1:] *= -1
 
-    # 四元数乘法
     w1, x1, y1, z1 = previous_conjugate[..., 0], previous_conjugate[..., 1], previous_conjugate[..., 2], \
         previous_conjugate[..., 3]
     w2, x2, y2, z2 = current[..., 0], current[..., 1], current[..., 2], current[..., 3]
