@@ -2,8 +2,6 @@ import random
 import matplotlib.pyplot as plt
 import cv2
 import copy
-
-import mmcv
 import numpy as np
 from copy import deepcopy
 
@@ -16,9 +14,9 @@ from mmdet.models.utils import build_transformer
 
 from mmdet3d.models.detectors.centerpoint import CenterPoint
 from mmdet3d.models import builder
-from mmdet3d.models.utils import change_occupancy_to_bev
 
 import time
+
 
 def compute_relative_rotation(ego_to_global_rotation):
     """
@@ -71,6 +69,8 @@ class II_World(CenterPoint):
                  test_mode=False,
                  task_mode='generate',
                  dataset_type='occ3d',
+                 eval_time=5,
+                 eval_metric='forecasting_miou',
                  **kwargs):
         super(II_World, self).__init__(**kwargs)
         # -------- Model Module --------
@@ -96,6 +96,8 @@ class II_World(CenterPoint):
         self.memory_frame_number = memory_frame_number
         self.sample_rate = sample_rate
         self.dataset_type = dataset_type
+        self.eval_time = eval_time
+        self.eval_metric = eval_metric
 
         # -------- Loss -----------
         self.feature_similarity_loss = builder.build_loss(feature_similarity_loss)
@@ -126,7 +128,8 @@ class II_World(CenterPoint):
         curr_ego_to_global_rt = torch.stack(
             [torch.tensor(img_meta['curr_ego_to_global'], device=device, dtype=dtype) for img_meta in img_metas])
         ego_to_global_rotation = torch.stack(
-            [torch.tensor(img_meta['ego_to_global_rotation'], device=device, dtype=dtype) for img_meta in img_metas])  # quarternion [bs, f, 4]
+            [torch.tensor(img_meta['ego_to_global_rotation'], device=device, dtype=dtype) for img_meta in
+             img_metas])  # quarternion [bs, f, 4]
         ego_to_global_translation = torch.stack(
             [torch.tensor(img_meta['ego_to_global_translation'], device=device, dtype=dtype) for img_meta in img_metas])
         # Change translation to delta translation, only utilize x,y
@@ -138,7 +141,8 @@ class II_World(CenterPoint):
         if self.dataset_type == 'waymo':
             # use fake gt_ego_lcf_feat and gt_ego_fut_cmd
             future_number = curr_to_future_ego_rt.shape[1]
-            gt_ego_lcf_feat = torch.zeros((curr_to_future_ego_rt.shape[0], future_number, 3), device=device, dtype=dtype)
+            gt_ego_lcf_feat = torch.zeros((curr_to_future_ego_rt.shape[0], future_number, 3), device=device,
+                                          dtype=dtype)
             gt_ego_fut_cmd = torch.zeros((curr_to_future_ego_rt.shape[0], future_number, 3), dtype=dtype, device=device)
             gt_ego_fut_cmd[..., 0] = 1
         else:
@@ -170,20 +174,20 @@ class II_World(CenterPoint):
         if start_update:
             if self.observe_relative_rotation is None:
                 # Zero-init
-                self.observe_relative_rotation =\
-                    torch.ones(bs, self.observe_frame_number, 4, device=device,dtype=dtype)
-                self.observe_delta_translation =\
-                    torch.zeros(bs, self.observe_frame_number, 2, device=device,dtype=dtype)
-                self.observe_ego_lcf_feat =\
+                self.observe_relative_rotation = \
+                    torch.ones(bs, self.observe_frame_number, 4, device=device, dtype=dtype)
+                self.observe_delta_translation = \
+                    torch.zeros(bs, self.observe_frame_number, 2, device=device, dtype=dtype)
+                self.observe_ego_lcf_feat = \
                     torch.zeros(bs, self.observe_frame_number, 3, device=device, dtype=dtype)
 
             if start_of_sequence.sum() > 0:
                 # Zero-init
-                self.observe_relative_rotation[start_of_sequence] =\
-                    torch.ones(start_of_sequence.sum(),self.observe_frame_number, 4, device=device, dtype=dtype)
-                self.observe_delta_translation[start_of_sequence] =\
-                    torch.zeros(start_of_sequence.sum(),self.observe_frame_number, 2, device=device, dtype=dtype)
-                self.observe_ego_lcf_feat[start_of_sequence] =\
+                self.observe_relative_rotation[start_of_sequence] = \
+                    torch.ones(start_of_sequence.sum(), self.observe_frame_number, 4, device=device, dtype=dtype)
+                self.observe_delta_translation[start_of_sequence] = \
+                    torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 2, device=device, dtype=dtype)
+                self.observe_ego_lcf_feat[start_of_sequence] = \
                     torch.zeros(start_of_sequence.sum(), self.observe_frame_number, 3, device=device, dtype=dtype)
 
         else:
@@ -296,13 +300,15 @@ class II_World(CenterPoint):
         history_info['history_token'] = torch.cat(
             [history_info['history_token'][:, 1:], curr_info['curr_latent'].unsqueeze(1).detach().clone()], dim=1)
         history_info['history_delta_translation'] = torch.cat(
-            [history_info['history_delta_translation'][:, 1:], curr_info['curr_delta_translation'].unsqueeze(1).detach().clone()], dim=1)
+            [history_info['history_delta_translation'][:, 1:],
+             curr_info['curr_delta_translation'].unsqueeze(1).detach().clone()], dim=1)
         history_info['history_relative_rotation'] = torch.cat(
-            [history_info['history_relative_rotation'][:, 1:], curr_info['curr_relative_rotation'].unsqueeze(1).detach().clone()], dim=1)
+            [history_info['history_relative_rotation'][:, 1:],
+             curr_info['curr_relative_rotation'].unsqueeze(1).detach().clone()], dim=1)
         history_info['history_ego_lcf_feat'] = torch.cat(
-            [history_info['history_ego_lcf_feat'][:, 1:], curr_info['curr_ego_lcf_feat'].unsqueeze(1).detach().clone()], dim=1)
+            [history_info['history_ego_lcf_feat'][:, 1:], curr_info['curr_ego_lcf_feat'].unsqueeze(1).detach().clone()],
+            dim=1)
         return history_info
-
 
     def forward_sample(self, latent, img_metas, predict_future_frame, train=True, **kwargs):
         # latent: [bs, f, c, h, w]
@@ -341,7 +347,8 @@ class II_World(CenterPoint):
 
             if frame_idx != predict_future_frame - 1:
                 # Update current info
-                curr_info = self.update_curr_info(curr_info, trans_infos, pred_trans_info, use_gt_rate, frame_idx, train)
+                curr_info = self.update_curr_info(curr_info, trans_infos, pred_trans_info, use_gt_rate, frame_idx,
+                                                  train)
                 # update history info
                 history_info = self.update_history_info(history_info, curr_info)
 
@@ -354,11 +361,12 @@ class II_World(CenterPoint):
         self.process_observe_info(trans_infos, latent, start_update=False)
 
         return_dict = dict(
-            pred_latents=torch.stack(pred_latents, dim=1),                          # [bs, f, c, w, h], pred future latents
-            pred_delta_translations=torch.stack(pred_delta_translations, dim=1),    # [bs, f, 2]
-            pred_relative_rotations=torch.stack(pred_relative_rotations, dim=1),    # [bs, f, 4], pred future rotations
-            targ_delta_translations=trans_infos['ego_to_global_delta_translation'], # [bs, f, 2], GT futuredelta translations
-            targ_relative_rotations=trans_infos['ego_to_global_relative_rotation'], # [bs, f, 4], GT future rotations
+            pred_latents=torch.stack(pred_latents, dim=1),  # [bs, f, c, w, h], pred future latents
+            pred_delta_translations=torch.stack(pred_delta_translations, dim=1),  # [bs, f, 2]
+            pred_relative_rotations=torch.stack(pred_relative_rotations, dim=1),  # [bs, f, 4], pred future rotations
+            targ_delta_translations=trans_infos['ego_to_global_delta_translation'],
+            # [bs, f, 2], GT futuredelta translations
+            targ_relative_rotations=trans_infos['ego_to_global_relative_rotation'],  # [bs, f, 4], GT future rotations
         )
         return return_dict
 
@@ -368,43 +376,39 @@ class II_World(CenterPoint):
 
         return_dict = dict()
         sample_idx = img_metas[0]['sample_idx']
-        scene_name = img_metas[0]['occ_path'].split('/')[-2]
-        sample_name = img_metas[0]['occ_path'].split('/')[-1]
         # Occupancy prediction
         if self.task_mode == 'generate':
             # Forward current latent
             targ_future_voxel_semantics = voxel_semantics[:, self.test_previous_frame + 1:]
             targ_curr_voxel_semantics = voxel_semantics[:, self.test_previous_frame:self.test_previous_frame + 1]
-
             pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
             pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
-
-            # vis_bev = change_occupancy_to_bev(pred_curr_voxel_semantics[0][0].cpu().numpy(), occ_size=(200, 200, 16))
-            # plt.figure()
-            # plt.imshow(vis_bev)
-            # plt.show()
-
-            return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
-            return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
+            if self.dataset_type != 'waymo':
+                return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
+                return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
             pred_latents = sample_dict['pred_latents']
             pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
             pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
 
-            save_pred_voxel_semantics = pred_voxel_semantics[0].cpu().numpy().astype(np.uint8)
-            mmcv.mkdir_or_exist('save_token')
-            mmcv.mkdir_or_exist('save_token/{}'.format(scene_name))
-            np.savez('save_token/{}/{}'.format(scene_name, sample_name), semantics=save_pred_voxel_semantics)
-
             if self.dataset_type == 'waymo':
-                # only perserve the 1, 2, 3s to save memory
-                pred_voxel_semantics = pred_voxel_semantics[:, [1, 3, 5]]
-                targ_future_voxel_semantics = targ_future_voxel_semantics[:, [1, 3, 5]]
+                # Due to the large waymo dataset, we only evaluate the eval_time-th frame
+                if self.eval_metric == 'forecasting_miou':
+                    pred_voxel_semantics = pred_voxel_semantics[:, [1, 3, 5]]
+                    targ_future_voxel_semantics = targ_future_voxel_semantics[:, [1, 3, 5]]
+                elif self.eval_metric == 'miou':
+                    pred_voxel_semantics = pred_voxel_semantics[:, [self.eval_time]]
+                    targ_future_voxel_semantics = targ_future_voxel_semantics[:, [self.eval_time]]
 
-            return_dict['pred_futu_semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
-            return_dict['targ_futu_semantics'] = targ_future_voxel_semantics.cpu().numpy().astype(np.uint8)
+            if self.eval_metric == 'forecasting_miou':
+                return_dict['pred_futu_semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
+                return_dict['targ_futu_semantics'] = targ_future_voxel_semantics.cpu().numpy().astype(np.uint8)
+            elif self.eval_metric == 'miou':
+                return_dict['semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
+                return_dict['targ_semantics'] = targ_future_voxel_semantics.cpu().numpy
 
         # Other information
+        return_dict['occ_path'] = [img_meta['occ_path'] for img_meta in img_metas]
         return_dict['occ_index'] = [img_meta['occ_index'] for img_meta in img_metas]
         return_dict['index'] = [img_meta['index'] for img_meta in img_metas]
         return_dict['sample_idx'] = sample_idx
@@ -424,7 +428,8 @@ class II_World(CenterPoint):
         targ_relative_rotations = return_dict['targ_relative_rotations']
 
         # Get valid index for training
-        valid_frame = torch.stack([torch.tensor(img_meta['valid_frame'], device=latent.device) for img_meta in img_metas])
+        valid_frame = torch.stack(
+            [torch.tensor(img_meta['valid_frame'], device=latent.device) for img_meta in img_metas])
 
         loss_dict = dict()
         for frame_idx in range(self.train_future_frame):
@@ -435,6 +440,7 @@ class II_World(CenterPoint):
                                                                                valid_frame[:, frame_idx])
 
         loss_dict['trajs_loss'] = self.trajs_loss(pred_delta_translations, targ_delta_translations, valid_frame, None)
-        loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame, None)
+        loss_dict['rotation_loss'] = self.rotation_loss(pred_relative_rotations, targ_relative_rotations, valid_frame,
+                                                        None)
 
         return loss_dict
