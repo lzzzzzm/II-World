@@ -2,6 +2,8 @@ import random
 import matplotlib.pyplot as plt
 import cv2
 import copy
+
+import mmcv
 import numpy as np
 from copy import deepcopy
 
@@ -14,6 +16,7 @@ from mmdet.models.utils import build_transformer
 
 from mmdet3d.models.detectors.centerpoint import CenterPoint
 from mmdet3d.models import builder
+from mmdet3d.models.utils import change_occupancy_to_bev
 
 import time
 
@@ -365,22 +368,41 @@ class II_World(CenterPoint):
 
         return_dict = dict()
         sample_idx = img_metas[0]['sample_idx']
+        scene_name = img_metas[0]['occ_path'].split('/')[-2]
+        sample_name = img_metas[0]['occ_path'].split('/')[-1]
         # Occupancy prediction
         if self.task_mode == 'generate':
             # Forward current latent
-            pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
-            pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
             targ_future_voxel_semantics = voxel_semantics[:, self.test_previous_frame + 1:]
             targ_curr_voxel_semantics = voxel_semantics[:, self.test_previous_frame:self.test_previous_frame + 1]
+
+            pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
+            pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
+
+            # vis_bev = change_occupancy_to_bev(pred_curr_voxel_semantics[0][0].cpu().numpy(), occ_size=(200, 200, 16))
+            # plt.figure()
+            # plt.imshow(vis_bev)
+            # plt.show()
+
+            return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
+            return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
             pred_latents = sample_dict['pred_latents']
             pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
             pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
 
+            save_pred_voxel_semantics = pred_voxel_semantics[0].cpu().numpy().astype(np.uint8)
+            mmcv.mkdir_or_exist('save_token')
+            mmcv.mkdir_or_exist('save_token/{}'.format(scene_name))
+            np.savez('save_token/{}/{}'.format(scene_name, sample_name), semantics=save_pred_voxel_semantics)
+
+            if self.dataset_type == 'waymo':
+                # only perserve the 1, 2, 3s to save memory
+                pred_voxel_semantics = pred_voxel_semantics[:, [1, 3, 5]]
+                targ_future_voxel_semantics = targ_future_voxel_semantics[:, [1, 3, 5]]
+
             return_dict['pred_futu_semantics'] = pred_voxel_semantics.cpu().numpy().astype(np.uint8)
-            return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
             return_dict['targ_futu_semantics'] = targ_future_voxel_semantics.cpu().numpy().astype(np.uint8)
-            return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
         # Other information
         return_dict['occ_index'] = [img_meta['occ_index'] for img_meta in img_metas]
