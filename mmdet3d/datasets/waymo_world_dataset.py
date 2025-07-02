@@ -144,8 +144,7 @@ class WaymoWorldDataset(Custom3DDataset):
             basename = os.path.basename(pts_filename)
             seq_name = basename[1:4]
             frame_name = basename[4:7]
-            occ_path = os.path.join(self.root_split, seq_name,  '{}_04.npz'.format(frame_name))
-            occ_path = occ_path.replace('\\', '/')
+            occ_path = os.path.join(self.root_split, seq_name, '{}_04.npz'.format(frame_name))
             info['occ_path'] = occ_path
 
             # Get pose info
@@ -157,7 +156,6 @@ class WaymoWorldDataset(Custom3DDataset):
             ego2global_translation = pose_info[0]['ego2global'][:3, 3]
             info['ego2global_rotation'] = ego2global_rotation
             info['ego2global_translation'] = ego2global_translation
-
 
         # Set prev characteristics
         prev = None
@@ -229,17 +227,16 @@ class WaymoWorldDataset(Custom3DDataset):
         input_dict.update(self.load_future_frame_info(index, info))
 
         # Update occ_index
-        input_dict['occ_index'] =  occ_index
+        input_dict['occ_index'] = occ_index
         return input_dict
 
     def load_future_frame_info(self, index, info):
-        future_occ_path = []                # list of future occupancy path
-        future_occ_index = []               # list of future occupancy index
-        curr_to_future_ego_rt = []          # list of transformation from current frame to future frame, calc by ego2global_t+1.inverse @ ego2global_t
-        curr_ego_to_global_rt = []          # list of transformation from ego to global, store from current frame to future frame
-        ego_to_global_rotation = []         # list of ego to global rotation, store the quaternion for training
-        ego_to_global_translation = []      # list of ego to global translation, store the translation for training
-
+        future_occ_path = []  # list of future occupancy path
+        future_occ_index = []  # list of future occupancy index
+        curr_to_future_ego_rt = []  # list of transformation from current frame to future frame, calc by ego2global_t+1.inverse @ ego2global_t
+        curr_ego_to_global_rt = []  # list of transformation from ego to global, store from current frame to future frame
+        ego_to_global_rotation = []  # list of ego to global rotation, store the quaternion for training
+        ego_to_global_translation = []  # list of ego to global translation, store the translation for training
 
         last_future_info = copy.deepcopy(info)
         last_future_index = index
@@ -254,7 +251,7 @@ class WaymoWorldDataset(Custom3DDataset):
             future_index = min(index + i + 1, len(self.data_infos) - 1)
             # check the future frame is in the same sequence
             future_info = self.data_infos[future_index]
-            if future_info['prev'] == last_future_info['frame_idx']:    # check the future frame is in the same sequence
+            if future_info['prev'] == last_future_info['frame_idx']:  # check the future frame is in the same sequence
                 future_occ_path.append(future_info['occ_path'])
                 future_occ_index.append(future_index)
                 # get the transformation from current frame to previous frame
@@ -263,12 +260,12 @@ class WaymoWorldDataset(Custom3DDataset):
                 if future_prev_info['frame_idx'] == future_info['prev']:
                     curr_ego_to_global = future_prev_info['ego2global']
                     futu_global_to_ego = future_info['global2ego']
-                    curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+                    curr_to_future_ego = futu_global_to_ego @ curr_ego_to_global
 
                 else:
                     curr_ego_to_global = future_info['ego2global']
                     futu_global_to_ego = future_info['global2ego']
-                    curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+                    curr_to_future_ego = futu_global_to_ego @ curr_ego_to_global
                 curr_to_future_ego_rt.append(curr_to_future_ego)
 
                 # get ego_to_global
@@ -287,7 +284,7 @@ class WaymoWorldDataset(Custom3DDataset):
                 # get the transformation from current frame to previous frame
                 curr_ego_to_global = last_future_info['ego2global']
                 futu_global_to_ego = last_future_info['global2ego']
-                curr_to_future_ego = curr_ego_to_global @ futu_global_to_ego
+                curr_to_future_ego = futu_global_to_ego @ curr_ego_to_global
                 curr_to_future_ego_rt.append(curr_to_future_ego)
 
                 # get ego_to_global
@@ -309,10 +306,9 @@ class WaymoWorldDataset(Custom3DDataset):
         )
         return output_dict
 
-
     def load_previous_frame_info(self, index, info):
-        previous_occ_path = []                      # list of previous occupancy path
-        previous_occ_index = []                     # list of previous occupancy index
+        previous_occ_path = []  # list of previous occupancy path
+        previous_occ_index = []  # list of previous occupancy index
         last_previous_info = copy.deepcopy(info)
         last_previous_index = index
         for i in range(self.load_previous_frame_number):
@@ -324,9 +320,6 @@ class WaymoWorldDataset(Custom3DDataset):
                 previous_occ_index.append(previous_index)
                 if self.load_previous_data:
                     previous_occ_path.append(previous_info['occ_path'])
-
-                # get the transformation from current frame to previous frame
-                prev_prev_info = self.data_infos[max(previous_index - 1, 0)]
 
                 # update the last previous info
                 last_previous_info = copy.deepcopy(previous_info)
@@ -346,6 +339,7 @@ class WaymoWorldDataset(Custom3DDataset):
     def evaluate_miou(self, results, logger=None):
         pred_sems, gt_sems = [], []
         data_index = []
+        occ_index = []
 
         num_classes = 17 if self.dataset_name == 'openocc' else 18
         self.miou_metric = Metric_mIoU(
@@ -368,6 +362,17 @@ class WaymoWorldDataset(Custom3DDataset):
                 data_index.append(id)
                 pred_sems.append(pred_sem)
                 gt_sems.append(gt_sem)
+                occ_index.append(result['occ_index'][i])
+
+        valid_pred_sems = []
+        valid_gt_sems = []
+        for i, occ_idx in tqdm(enumerate(occ_index)):
+            if len(occ_idx) != len(set(occ_idx)):
+                continue
+            valid_pred_sems.append(pred_sems[i])
+            valid_gt_sems.append(gt_sems[i])
+        pred_sems = valid_pred_sems
+        gt_sems = valid_gt_sems
 
         for index in tqdm(data_index):
             if index >= len(self.data_infos):
@@ -394,16 +399,17 @@ class WaymoWorldDataset(Custom3DDataset):
         print('\nStarting Evaluation...')
         num_classes = 17 if self.dataset_name == 'openocc' else 18
         self.miou_metric_list = []
-        for i in range(self.load_future_frame_number):
+        for i in range(3):
             self.miou_metric_list.append(
                 Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
             )
-        self.curr_miou_metric = Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
+        self.curr_miou_metric = Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False,
+                                            logger=logger)
 
         data_index = []
         occ_index = []
         # Occupancy-related
-        pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems  = [], [], [], []
+        pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems = [], [], [], []
 
         processed_set = set()
         for result in results:
@@ -441,61 +447,39 @@ class WaymoWorldDataset(Custom3DDataset):
         targ_curr_sems = valid_targ_curr_sems
         targ_futu_sems = valid_targ_futu_sems
 
-        # evaluate time 0s also means reconstructing the current frame
-        eval_dict = dict()
-        if 0 in self.eval_time:
-            for i in tqdm(range(len(pred_curr_sems))):
-                pred_curr_sem = pred_curr_sems[i][0]
-                targ_curr_sem = targ_curr_sems[i][0]
-                self.curr_miou_metric.add_batch(pred_curr_sem, targ_curr_sem, None, None)
-                self.curr_miou_metric.add_iou_batch(pred_curr_sem, targ_curr_sem, None, None)
-            print(f'evaluating time {0}s ----------------------')
-            _, miou, _, _, _ = self.curr_miou_metric.count_miou()
-            iou = self.curr_miou_metric.count_iou()
-            eval_dict.update(
-                {
-                    f'semantics_miou_time_{0}s': miou,
-                    f'binary_iou_time_{0}s': iou
-                }
-            )
-
         # evaluate future frames
         for i in tqdm(range(len(pred_futu_sems))):
             pred_futu_sem = pred_futu_sems[i]
             targ_futu_sem = targ_futu_sems[i]
             for j in range(pred_futu_sem.shape[0]):
-                time = 0.5 * (j + 1)
-                if time in self.eval_time:
-                    self.miou_metric_list[j].add_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
-                    self.miou_metric_list[j].add_iou_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
+                self.miou_metric_list[j].add_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
+                self.miou_metric_list[j].add_iou_batch(pred_futu_sem[j], targ_futu_sem[j], None, None)
 
         # Create result tabel
         table_data = [['Time', 'mIoU', 'IoU']]
-
+        eval_dict = dict()
         restore_table_data = []
-        for i in range(self.load_future_frame_number):
-            time = 0.5 * (i + 1)
-            if time in self.eval_time:
-                _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
-                print(f'evaluating time {time}s ----------------------')
-                iou = self.miou_metric_list[i].count_iou()
-                restore_table_data.append([f'{time}s', f'{miou:.2f}', f'{iou:.2f}'])
-                eval_dict.update(
-                    {
-                        f'semantics_miou_time_{time}s': miou,
-                        f'binary_iou_time_{time}s': iou
-                    }
-                )
+        time_list = [1, 2, 3]
+        for i in range(3):
+            time = time_list[i]
+            _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
+            print(f'evaluating time {time}s ----------------------')
+            iou = self.miou_metric_list[i].count_iou()
+            restore_table_data.append([f'{time}s', f'{miou:.2f}', f'{iou:.2f}'])
+            eval_dict.update(
+                {
+                    f'semantics_miou_time_{time}s': miou,
+                    f'binary_iou_time_{time}s': iou
+                }
+            )
         # calc the average
         miou_list = []
         iou_list = []
-        for i in range(self.load_future_frame_number):
-            time = 0.5 * (i + 1)
-            if time in self.eval_time:
-                _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
-                iou = self.miou_metric_list[i].count_iou()
-                miou_list.append(miou)
-                iou_list.append(iou)
+        for i in range(3):
+            _, miou, _, _, _ = self.miou_metric_list[i].count_miou()
+            iou = self.miou_metric_list[i].count_iou()
+            miou_list.append(miou)
+            iou_list.append(iou)
         restore_table_data.append(['Average', f'{np.mean(miou_list):.2f}', f'{np.mean(iou_list):.2f}'])
 
         for i in range(len(restore_table_data)):
