@@ -73,6 +73,8 @@ class Custom3DDataset(Dataset):
                  split=None,
                  pts_prefix=None,
                  pose_file=None,
+                 generate_mode=False,
+                 generate_scene=None,
                  file_client_args=dict(backend='disk')):
         super().__init__()
         self.pts_prefix = pts_prefix
@@ -83,6 +85,8 @@ class Custom3DDataset(Dataset):
         self.modality = modality
         self.filter_empty_gt = filter_empty_gt
         self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
+        self.generate_mode = generate_mode
+        self.generate_scene = generate_scene
 
         self.CLASSES = self.get_classes(classes)
         self.file_client = mmcv.FileClient(**file_client_args)

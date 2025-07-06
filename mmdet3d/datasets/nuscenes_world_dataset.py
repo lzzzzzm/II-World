@@ -29,6 +29,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                  classes=None,
                  load_interval=1,
                  test_mode=False,
+                 generate_mode=False,
+                 generate_scene=None,
                  load_future_frame_number=0,
                  load_previous_frame_number=0,
                  load_previous_data=False,
@@ -38,12 +40,12 @@ class NuScenesWorldDataset(Custom3DDataset):
                  sequences_split_num=1,
                  # BEVAug
                  bda_aug_conf=None,
-                 #
-                 dataset_name='occ3d',
+                 # Dataset info
+                 dataset_name='openocc',
                  eval_metric='miou',
                  eval_time=(0, 1, 2, 3),
                  **kwargs
-        ):
+                 ):
         self.load_interval = load_interval
         super().__init__(
             data_root=data_root,
@@ -51,7 +53,9 @@ class NuScenesWorldDataset(Custom3DDataset):
             pipeline=pipeline,
             classes=classes,
             test_mode=test_mode,
-            filter_empty_gt=filter_empty_gt
+            filter_empty_gt=filter_empty_gt,
+            generate_mode=generate_mode,
+            generate_scene=generate_scene,
         )
         self.load_previous_data = load_previous_data
         self.load_previous_frame_number = load_previous_frame_number
@@ -67,6 +71,7 @@ class NuScenesWorldDataset(Custom3DDataset):
         # BEVAug
         self.bda_aug_conf = bda_aug_conf
         #
+        self.generate_scene = generate_scene
         self.dataset_name = dataset_name
         self.eval_metric = eval_metric
         self.eval_time = eval_time
@@ -110,27 +115,6 @@ class NuScenesWorldDataset(Custom3DDataset):
                 self.flag = np.array(new_flags, dtype=np.int64)
 
 
-    def compute_L2(self, trajs, gt_trajs):
-        '''
-        trajs: torch.Tensor (n_future, 2)
-        gt_trajs: torch.Tensor (n_future, 2)
-        '''
-        # return torch.sqrt(((trajs[:, :, :2] - gt_trajs[:, :, :2]) ** 2).sum(dim=-1))
-        # import pdb; pdb.set_trace()
-        pred_len = trajs.shape[0]
-        ade = float(
-            sum(
-                np.sqrt(
-                    (trajs[i, 0] - gt_trajs[i, 0]) ** 2
-                    + (trajs[i, 1] - gt_trajs[i, 1]) ** 2
-                )
-                for i in range(pred_len)
-            )
-            / pred_len
-        )
-
-        return ade
-
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
 
@@ -145,6 +129,14 @@ class NuScenesWorldDataset(Custom3DDataset):
         data_infos = data_infos[::self.load_interval]
         self.metadata = data['metadata']
         self.version = self.metadata['version']
+        if self.generate_mode:
+            generate_data_infos = []
+            for info in data_infos:
+                scene_name = info['occ_path'].split('/')[-2]
+                if scene_name != self.generate_scene:
+                    continue
+                generate_data_infos.append(info)
+            return generate_data_infos
         return data_infos
 
     def get_data_info(self, index):
@@ -186,9 +178,11 @@ class NuScenesWorldDataset(Custom3DDataset):
             input_dict['start_of_sequence'] = index == 0 or self.flag[index - 1] != self.flag[index]
 
             if not input_dict['start_of_sequence']:
-                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index - 1],"ego", "ego"))
+                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(
+                    nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index - 1], "ego", "ego"))
             else:
-                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index],"ego", "ego"))
+                input_dict['curr_to_prev_ego_rt'] = torch.FloatTensor(
+                    nuscenes_get_rt_matrix(self.data_infos[index], self.data_infos[index], "ego", "ego"))
 
         occ_index = [index]
 
@@ -215,28 +209,29 @@ class NuScenesWorldDataset(Custom3DDataset):
         return input_dict
 
     def load_future_frame_info(self, index, info):
-        future_occ_path = []                # list of future occupancy path
-        future_occ_index = []               # list of future occupancy index
-        curr_to_future_ego_rt = []          # list of transformation from current frame to future frame, calc by ego2global_t+1.inverse @ ego2global_t
-        curr_ego_to_global_rt = []          # list of transformation from ego to global, store from current frame to future frame
-        ego_to_global_rotation = []         # list of ego to global rotation, store the quaternion for training
-        ego_to_global_translation = []      # list of ego to global translation, store the translation for training
-        pose_mat = []                       # list of pose matrix, the pose matrix obtain from ego2global and ego2sensor, only used current frame
-        ego_from_sensor = []                # list of ego from sensor, the transformation from sensor to ego,
-        ego_to_lidar = []                   # list of ego to lidar, the transformation from ego to lidar
-
+        future_occ_path = []  # list of future occupancy path
+        future_occ_index = []  # list of future occupancy index
+        curr_to_future_ego_rt = []  # list of transformation from current frame to future frame, calc by ego2global_t+1.inverse @ ego2global_t
+        curr_ego_to_global_rt = []  # list of transformation from ego to global, store from current frame to future frame
+        ego_to_global_rotation = []  # list of ego to global rotation, store the quaternion for training
+        ego_to_global_translation = []  # list of ego to global translation, store the translation for training
+        pose_mat = []  # list of pose matrix, the pose matrix obtain from ego2global and ego2sensor, only used current frame
+        ego_from_sensor = []  # list of ego from sensor, the transformation from sensor to ego,
+        ego_to_lidar = []  # list of ego to lidar, the transformation from ego to lidar
 
         last_future_info = copy.deepcopy(info)
         last_future_index = index
 
         # init current frame information
-        ego_to_global = transform_matrix(info['ego2global_translation'], pyquaternion.Quaternion(info['ego2global_rotation']))
+        ego_to_global = transform_matrix(info['ego2global_translation'],
+                                         pyquaternion.Quaternion(info['ego2global_rotation']))
         curr_ego_to_global_rt.append(ego_to_global)
         ego_to_global_rotation.append(info['ego2global_rotation'])
         ego_to_global_translation.append(info['ego2global_translation'])
         pose_mat.append(info['pose_mat'])
         ego_from_sensor.append(info['ego_from_sensor'])
-        ego2lidar = transform_matrix(info['lidar2ego_translation'], pyquaternion.Quaternion(info['lidar2ego_rotation']), inverse=True)
+        ego2lidar = transform_matrix(info['lidar2ego_translation'], pyquaternion.Quaternion(info['lidar2ego_rotation']),
+                                     inverse=True)
         ego_to_lidar.append(ego2lidar)
 
         valid_frame = np.ones(self.load_future_frame_number, dtype=np.bool)
@@ -244,7 +239,7 @@ class NuScenesWorldDataset(Custom3DDataset):
             future_index = min(index + i + 1, len(self.data_infos) - 1)
             # check the future frame is in the same sequence
             future_info = self.data_infos[future_index]
-            if future_info['prev'] == last_future_info['token']:    # check the future frame is in the same sequence
+            if future_info['prev'] == last_future_info['token']:  # check the future frame is in the same sequence
                 future_occ_path.append(future_info['occ_path'])
                 future_occ_index.append(future_index)
                 # get the transformation from current frame to previous frame
@@ -257,7 +252,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                 curr_to_future_ego_rt.append(curr_to_future_ego)
 
                 # get ego_to_global
-                ego_to_global = transform_matrix(future_info['ego2global_translation'], pyquaternion.Quaternion(future_info['ego2global_rotation']))
+                ego_to_global = transform_matrix(future_info['ego2global_translation'],
+                                                 pyquaternion.Quaternion(future_info['ego2global_rotation']))
                 curr_ego_to_global_rt.append(ego_to_global)
                 ego_to_global_rotation.append(future_info['ego2global_rotation'])
                 ego_to_global_translation.append(future_info['ego2global_translation'])
@@ -265,7 +261,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pose_mat.append(future_info['pose_mat'])
 
                 # ego2lidar
-                ego2lidar = transform_matrix(future_info['lidar2ego_translation'], pyquaternion.Quaternion(future_info['lidar2ego_rotation']), inverse=True)
+                ego2lidar = transform_matrix(future_info['lidar2ego_translation'],
+                                             pyquaternion.Quaternion(future_info['lidar2ego_rotation']), inverse=True)
                 ego_to_lidar.append(ego2lidar)
 
                 # update the last future info
@@ -280,7 +277,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                 curr_to_future_ego_rt.append(curr_to_future_ego)
 
                 # get ego_to_global
-                ego_to_global = transform_matrix(last_future_info['ego2global_translation'],pyquaternion.Quaternion(last_future_info['ego2global_rotation']))
+                ego_to_global = transform_matrix(last_future_info['ego2global_translation'],
+                                                 pyquaternion.Quaternion(last_future_info['ego2global_rotation']))
                 curr_ego_to_global_rt.append(ego_to_global)
                 ego_to_global_rotation.append(last_future_info['ego2global_rotation'])
                 ego_to_global_translation.append(last_future_info['ego2global_translation'])
@@ -288,7 +286,9 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pose_mat.append(last_future_info['pose_mat'])
 
                 # ego2lidar
-                ego2lidar = transform_matrix(last_future_info['lidar2ego_translation'], pyquaternion.Quaternion(last_future_info['lidar2ego_rotation']), inverse=True)
+                ego2lidar = transform_matrix(last_future_info['lidar2ego_translation'],
+                                             pyquaternion.Quaternion(last_future_info['lidar2ego_rotation']),
+                                             inverse=True)
                 ego_to_lidar.append(ego2lidar)
 
                 valid_frame[i:] = False
@@ -307,9 +307,9 @@ class NuScenesWorldDataset(Custom3DDataset):
         return output_dict
 
     def load_previous_frame_info(self, index, info):
-        previous_occ_path = []                      # list of previous occupancy path
-        previous_occ_index = []                     # list of previous occupancy index
-        previous_curr_to_prev_ego_rt = []           # list of transformation from current frame to previous frame
+        previous_occ_path = []  # list of previous occupancy path
+        previous_occ_index = []  # list of previous occupancy index
+        previous_curr_to_prev_ego_rt = []  # list of transformation from current frame to previous frame
         last_previous_info = copy.deepcopy(info)
         last_previous_index = index
         for i in range(self.load_previous_frame_number):
@@ -376,10 +376,20 @@ class NuScenesWorldDataset(Custom3DDataset):
         gt_ego_fut_trajs = np.array(gt_ego_fut_trajs)
         gt_ego_fut_cmd = np.array(gt_ego_fut_cmd)
         gt_ego_lcf_feat = np.array(gt_ego_lcf_feat)
+        gt_ego_fut_trajs_ori = []
+        for i in range(self.load_future_frame_number):
+            if i == 0:
+                gt_ego_fut_trajs_ori.append(info['gt_ego_fut_trajs'])
+            else:
+                get_info = self.data_infos[min(index + i, len(self.data_infos) - 1)]
+                gt_ego_fut_trajs_ori.append(get_info['gt_ego_fut_trajs'])
+        gt_ego_fut_trajs_ori = np.array(gt_ego_fut_trajs_ori)
+
         output_dict = dict(
             gt_ego_fut_trajs=gt_ego_fut_trajs,
             gt_ego_fut_cmd=gt_ego_fut_cmd,
             gt_ego_lcf_feat=gt_ego_lcf_feat,
+            gt_ego_fut_trajs_ori=gt_ego_fut_trajs_ori,
         )
         return output_dict
 
@@ -400,9 +410,9 @@ class NuScenesWorldDataset(Custom3DDataset):
 
         gt_fut_trajs = info['gt_agent_fut_trajs'][mask]  # N, 2*6
         gt_fut_masks = info['gt_agent_fut_masks'][mask]  # N, 6
-        gt_fut_goal = info['gt_agent_fut_goal'][mask]    # N
-        gt_lcf_feat = info['gt_agent_lcf_feat'][mask]    # N, 9
-        gt_fut_yaw = info['gt_agent_fut_yaw'][mask]      # N, 6
+        gt_fut_goal = info['gt_agent_fut_goal'][mask]  # N
+        gt_lcf_feat = info['gt_agent_lcf_feat'][mask]  # N, 9
+        gt_fut_yaw = info['gt_agent_fut_yaw'][mask]  # N, 6
         attr_labels = np.concatenate(
             [gt_fut_trajs, gt_fut_masks, gt_fut_goal[..., None], gt_lcf_feat, gt_fut_yaw], axis=-1
         ).astype(np.float32)
@@ -459,8 +469,8 @@ class NuScenesWorldDataset(Custom3DDataset):
         _, miou, _, _, _ = self.miou_metric.count_miou()
         iou = self.miou_metric.count_iou()
         eval_dict = {
-            'semantics_miou':miou,
-            'binary_iou':iou
+            'semantics_miou': miou,
+            'binary_iou': iou
         }
         return eval_dict
 
@@ -475,12 +485,14 @@ class NuScenesWorldDataset(Custom3DDataset):
             self.miou_metric_list.append(
                 Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
             )
-        self.curr_miou_metric = Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False, logger=logger)
+        self.curr_miou_metric = Metric_mIoU(num_classes=num_classes, use_lidar_mask=False, use_image_mask=False,
+                                            logger=logger)
 
         data_index = []
         occ_index = []
         # Occupancy-related
-        pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems  = [], [], [], []
+        pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems = [], [], [], []
+        occ_paths = []
 
         processed_set = set()
         for result in results:
@@ -493,6 +505,7 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pred_futu_sem = result['pred_futu_semantics'][i]
                 targ_curr_sem = result['targ_curr_semantics'][i]
                 targ_futu_sem = result['targ_futu_semantics'][i]
+                occ_path = result['occ_path'][i]
 
                 occ_index.append(result['occ_index'][i])
                 data_index.append(id)
@@ -500,10 +513,12 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pred_futu_sems.append(pred_futu_sem)
                 targ_curr_sems.append(targ_curr_sem)
                 targ_futu_sems.append(targ_futu_sem)
+                occ_paths.append(occ_path)
 
         # filter valid data
         # Occupancy-related
         valid_pred_curr_sems, valid_pred_futu_sems, valid_targ_curr_sems, valid_targ_futu_sems = [], [], [], []
+        valid_occ_paths = []
         for i, occ_idx in tqdm(enumerate(occ_index)):
             if len(occ_idx) != len(set(occ_idx)):
                 continue
@@ -511,12 +526,14 @@ class NuScenesWorldDataset(Custom3DDataset):
             valid_pred_futu_sems.append(pred_futu_sems[i])
             valid_targ_curr_sems.append(targ_curr_sems[i])
             valid_targ_futu_sems.append(targ_futu_sems[i])
+            valid_occ_paths.append(occ_paths[i])
 
         # delete invalid data
         pred_curr_sems = valid_pred_curr_sems
         pred_futu_sems = valid_pred_futu_sems
         targ_curr_sems = valid_targ_curr_sems
         targ_futu_sems = valid_targ_futu_sems
+        occ_paths = valid_occ_paths
 
         # evaluate time 0s also means reconstructing the current frame
         eval_dict = dict()
