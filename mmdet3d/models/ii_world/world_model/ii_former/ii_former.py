@@ -243,6 +243,8 @@ class II_Former(BaseModule):
         trans_info = self.process_transformation_matrix(bev_queries, curr_info, plan_output)
         if self.task_mode == 'generate':
             curr_to_futu_info = trans_info['targ_curr_to_futu_info']
+        elif self.task_mode == 'high-level-control':
+            curr_to_futu_info = trans_info['pred_curr_to_futu_info']
 
         bev_embed = bev_embed + self.plan_embed(curr_to_futu_info).unsqueeze(1)
 

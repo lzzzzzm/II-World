@@ -380,6 +380,7 @@ class II_World(CenterPoint):
             pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
             pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
             if self.dataset_type != 'waymo':
+                # Due to memory limitation
                 return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
                 return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
