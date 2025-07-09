@@ -6,6 +6,7 @@
 
 ![demo](https://github.com/lzzzzzm/II-World/blob/main/asserts/demo.mp4)
 
+
 ## 🚀 News
 
 * **[2025-06]** **$I^2$-World** is accepted to ICCV 2025.
