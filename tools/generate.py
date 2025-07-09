@@ -22,6 +22,7 @@ from mmdet.apis import set_random_seed
 from mmdet.datasets import replace_ImageToTensor
 from mmdet3d.models.utils import change_occupancy_to_bev
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import logging
 import copy
 
@@ -159,6 +160,48 @@ def parse_args():
         args.eval_options = args.options
     return args
 
+
+def show_translation_vector(save_path, curr_to_future_ego_rts, curr_to_future_ego_rts_sam, curr_to_future_ego_rts_sam2):
+    """
+    save the translation vector visualization
+    """
+    start_origin = np.zeros((2,))
+    start_origin_sam = np.zeros((2,))
+    start_origin_sam2 = np.zeros((2,))
+    translation = curr_to_future_ego_rts[:, :2, 3]
+    translation_sam = curr_to_future_ego_rts_sam[:, :2, 3]
+    translation_sam2 = curr_to_future_ego_rts_sam2[:, :2, 3]
+    print('translation_sam2 shape:', translation_sam2.shape)
+
+    # subplot
+    fig, axs = plt.subplots(1, 3, figsize=(8, 4))
+
+    for j in range(0, translation.shape[0], 2):
+        end = translation[j] + start_origin
+        axs[0].quiver(start_origin[0], start_origin[1],
+                   end[0] - start_origin[0], end[1] - start_origin[1],
+                   angles='xy', scale_units='xy', scale=1, color='r', alpha=0.5)
+        start_origin = end
+
+    for j in range(0, translation_sam.shape[0], 2):
+        end_sam = translation_sam[j] + start_origin_sam
+        axs[1].quiver(start_origin_sam[0], start_origin_sam[1],
+                   end_sam[0] - start_origin_sam[0], end_sam[1] - start_origin_sam[1],
+                   angles='xy', scale_units='xy', scale=1, color='g', alpha=0.5)
+        start_origin_sam = end_sam
+
+    for j in range(0, translation_sam2.shape[0], 2):
+        end_sam2 = translation_sam2[j] + start_origin_sam2
+        axs[2].quiver(start_origin_sam2[0], start_origin_sam2[1],
+                   end_sam2[0] - start_origin_sam2[0], end_sam2[1] - start_origin_sam2[1],
+                   angles='xy', scale_units='xy', scale=1, color='b', alpha=0.5)
+        start_origin_sam2 = end_sam2
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(save_path.replace('bev', 'vector'), dpi=300)
+    plt.close()
+
+
 def show_high_level_forecast_bev(save_path, vis_bevs_right, vis_bevs_lefts, vis_bevs_straights):
     num_cols = 6
     num_rows = 6
@@ -192,9 +235,10 @@ def show_high_level_forecast_bev(save_path, vis_bevs_right, vis_bevs_lefts, vis_
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
     # plt.show()
+    plt.close(fig)
 
 
-def show_fine_forecast_bev(save_path, vis_bevs_ori, vis_bev_sams, vis_bev_sams_2):
+def show_fine_forecast_bev(save_path, vis_bevs_ori, vis_bev_sams, vis_bev_sams_2, data, copy_data, copy_data_2):
     num_cols = 6
     num_rows = 6
     fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 6))
@@ -213,6 +257,13 @@ def show_fine_forecast_bev(save_path, vis_bevs_ori, vis_bev_sams, vis_bev_sams_2
         # plot the ego-car points in (100, 100) in the BEV, utilize a blue point to represent the ego-car
         axs[row, col].plot(100, 100, 'bo', markersize=2)  # blue point at (100, 100)
 
+    show_translation_vector(
+        save_path,
+        data['img_metas'].data[0][0]['curr_to_future_ego_rt'],
+        copy_data['img_metas'].data[0][0]['curr_to_future_ego_rt'],
+        copy_data_2['img_metas'].data[0][0]['curr_to_future_ego_rt']
+    )
+
     group_labels = ['Ori', 'Sample1', 'Sample2']
     group_centers = [1 / 6, 0.5, 5 / 6]
 
@@ -227,8 +278,9 @@ def show_fine_forecast_bev(save_path, vis_bevs_ori, vis_bev_sams, vis_bev_sams_2
                                     transform=fig.transFigure))
 
     plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    # plt.show()
+    # plt.savefig(save_path, dpi=300)
+    # plt.close(fig)
+    plt.show()
 
 def main():
     args = parse_args()
@@ -319,6 +371,7 @@ def main():
     curr_to_future_ego_rts = np.load('tools/curr_to_future_ego_rts.npz', allow_pickle=True)['curr_to_future_ego_rts']
 
     if args.task_mode == 'generate':
+        np.random.seed(1)
         for i, data in enumerate(data_loader):
             # Random sample the future ego-rt
             sample_index_1 = np.random.randint(0, len(curr_to_future_ego_rts))
@@ -335,18 +388,17 @@ def main():
             pred_semantics_result_ori = result_ori[0]['pred_futu_semantics'][0]
             pred_semantics_result_sam = result_sam[0]['pred_futu_semantics'][0]
             pred_semantics_result_sam_2 = result_sam_2[0]['pred_futu_semantics'][0]
-            vis_bev_oris = []
-            vis_bev_sams = []
-            vis_bev_sams_2 = []
+            vis_bev_oris, vis_bev_sams, vis_bev_sams_2 = [], [], []
             for semantics_ori, semantics_sam, semantics_sam_2 in zip(pred_semantics_result_ori, pred_semantics_result_sam, pred_semantics_result_sam_2):
                 vis_bev_ori = change_occupancy_to_bev(semantics_ori)
                 vis_bev_sam = change_occupancy_to_bev(semantics_sam)
                 vis_bev_sam_2 = change_occupancy_to_bev(semantics_sam_2)
+                vis_bev_sam_2 = cv.cvtColor(vis_bev_sam_2, cv.COLOR_RGB2BGR)
                 vis_bev_oris.append(vis_bev_ori)
                 vis_bev_sams.append(vis_bev_sam)
                 vis_bev_sams_2.append(vis_bev_sam_2)
-            save_path = os.path.join(save_root, 'forecast_bev_{}'.format(i))
-            show_fine_forecast_bev(save_path, vis_bev_oris, vis_bev_sams, vis_bev_sams_2)
+            save_path = os.path.join(os.path.join(save_root, '{}'.format(i)))
+            show_fine_forecast_bev(save_path, vis_bev_oris, vis_bev_sams, vis_bev_sams_2, data, copy_data, copy_data_2)
     elif args.task_mode == 'high_level_control':
         # Generate example of high-level control, utilize the cmd state to control the future forecast
         for i, data in enumerate(data_loader):
