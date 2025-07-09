@@ -4,10 +4,7 @@
 
 </div>
 
-<h3 align="center">
-<a href="https://github.com/lzzzzzm/II-World/blob/main/asserts/demo.mp4">Video</a>
-</h3>
-
+https://github.com/lzzzzzm/II-World/tree/d7f27c13b12850cd6a8f010945f93e03e627ef69/asserts/demo
 
 ## 🚀 News
 
