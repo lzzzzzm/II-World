@@ -4,7 +4,9 @@
 
 </div>
 
-![demo](https://github.com/lzzzzzm/II-World/blob/main/asserts/demo.mp4)
+<h3 align="center">
+<a href="https://github.com/lzzzzzm/II-World/blob/main/asserts/demo.mp4">Video</a>
+</h3>
 
 
 ## 🚀 News
