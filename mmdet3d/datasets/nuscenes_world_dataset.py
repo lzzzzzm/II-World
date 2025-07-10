@@ -19,6 +19,7 @@ from mmdet3d.utils import get_root_logger
 
 from mmdet3d.core.bbox.structures import LiDARInstance3DBoxes, Box3DMode
 
+
 @DATASETS.register_module()
 class NuScenesWorldDataset(Custom3DDataset):
 
@@ -29,8 +30,6 @@ class NuScenesWorldDataset(Custom3DDataset):
                  classes=None,
                  load_interval=1,
                  test_mode=False,
-                 generate_mode=False,
-                 generate_scene=None,
                  load_future_frame_number=0,
                  load_previous_frame_number=0,
                  load_previous_data=False,
@@ -40,8 +39,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                  sequences_split_num=1,
                  # BEVAug
                  bda_aug_conf=None,
-                 # Dataset info
-                 dataset_name='openocc',
+                 #
+                 dataset_name='occ3d',
                  eval_metric='miou',
                  eval_time=(0, 1, 2, 3),
                  **kwargs
@@ -53,9 +52,7 @@ class NuScenesWorldDataset(Custom3DDataset):
             pipeline=pipeline,
             classes=classes,
             test_mode=test_mode,
-            filter_empty_gt=filter_empty_gt,
-            generate_mode=generate_mode,
-            generate_scene=generate_scene,
+            filter_empty_gt=filter_empty_gt
         )
         self.load_previous_data = load_previous_data
         self.load_previous_frame_number = load_previous_frame_number
@@ -71,7 +68,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         # BEVAug
         self.bda_aug_conf = bda_aug_conf
         #
-        self.generate_scene = generate_scene
         self.dataset_name = dataset_name
         self.eval_metric = eval_metric
         self.eval_time = eval_time
@@ -114,6 +110,26 @@ class NuScenesWorldDataset(Custom3DDataset):
                 assert len(np.bincount(new_flags)) == len(np.bincount(self.flag)) * self.sequences_split_num
                 self.flag = np.array(new_flags, dtype=np.int64)
 
+    def compute_L2(self, trajs, gt_trajs):
+        '''
+        trajs: torch.Tensor (n_future, 2)
+        gt_trajs: torch.Tensor (n_future, 2)
+        '''
+        # return torch.sqrt(((trajs[:, :, :2] - gt_trajs[:, :, :2]) ** 2).sum(dim=-1))
+        # import pdb; pdb.set_trace()
+        pred_len = trajs.shape[0]
+        ade = float(
+            sum(
+                np.sqrt(
+                    (trajs[i, 0] - gt_trajs[i, 0]) ** 2
+                    + (trajs[i, 1] - gt_trajs[i, 1]) ** 2
+                )
+                for i in range(pred_len)
+            )
+            / pred_len
+        )
+
+        return ade
 
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
@@ -129,14 +145,6 @@ class NuScenesWorldDataset(Custom3DDataset):
         data_infos = data_infos[::self.load_interval]
         self.metadata = data['metadata']
         self.version = self.metadata['version']
-        if self.generate_mode:
-            generate_data_infos = []
-            for info in data_infos:
-                scene_name = info['occ_path'].split('/')[-2]
-                if scene_name != self.generate_scene:
-                    continue
-                generate_data_infos.append(info)
-            return generate_data_infos
         return data_infos
 
     def get_data_info(self, index):
@@ -376,20 +384,10 @@ class NuScenesWorldDataset(Custom3DDataset):
         gt_ego_fut_trajs = np.array(gt_ego_fut_trajs)
         gt_ego_fut_cmd = np.array(gt_ego_fut_cmd)
         gt_ego_lcf_feat = np.array(gt_ego_lcf_feat)
-        gt_ego_fut_trajs_ori = []
-        for i in range(self.load_future_frame_number):
-            if i == 0:
-                gt_ego_fut_trajs_ori.append(info['gt_ego_fut_trajs'])
-            else:
-                get_info = self.data_infos[min(index + i, len(self.data_infos) - 1)]
-                gt_ego_fut_trajs_ori.append(get_info['gt_ego_fut_trajs'])
-        gt_ego_fut_trajs_ori = np.array(gt_ego_fut_trajs_ori)
-
         output_dict = dict(
             gt_ego_fut_trajs=gt_ego_fut_trajs,
             gt_ego_fut_cmd=gt_ego_fut_cmd,
             gt_ego_lcf_feat=gt_ego_lcf_feat,
-            gt_ego_fut_trajs_ori=gt_ego_fut_trajs_ori,
         )
         return output_dict
 
@@ -428,6 +426,7 @@ class NuScenesWorldDataset(Custom3DDataset):
     def evaluate_miou(self, results, logger=None):
         pred_sems, gt_sems = [], []
         data_index = []
+        times = []
 
         num_classes = 17 if self.dataset_name == 'openocc' else 18
         self.miou_metric = Metric_mIoU(
@@ -446,8 +445,15 @@ class NuScenesWorldDataset(Custom3DDataset):
                 processed_set.add(id)
 
                 pred_sem = result['semantics'][i]
+                time = result['time'] if 'time' in result else 0
                 data_index.append(id)
                 pred_sems.append(pred_sem)
+                times.append(time)
+
+        # calc the average time
+        if len(times) > 0:
+            avg_time = sum(times) / len(times)
+            print(f'Average time: {avg_time}')
 
         for index in tqdm(data_index):
             if index >= len(self.data_infos):
@@ -492,7 +498,7 @@ class NuScenesWorldDataset(Custom3DDataset):
         occ_index = []
         # Occupancy-related
         pred_curr_sems, pred_futu_sems, targ_curr_sems, targ_futu_sems = [], [], [], []
-        occ_paths = []
+        times = []
 
         processed_set = set()
         for result in results:
@@ -505,7 +511,7 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pred_futu_sem = result['pred_futu_semantics'][i]
                 targ_curr_sem = result['targ_curr_semantics'][i]
                 targ_futu_sem = result['targ_futu_semantics'][i]
-                occ_path = result['occ_path'][i]
+                time = result['time'] if 'time' in result else 0
 
                 occ_index.append(result['occ_index'][i])
                 data_index.append(id)
@@ -513,12 +519,12 @@ class NuScenesWorldDataset(Custom3DDataset):
                 pred_futu_sems.append(pred_futu_sem)
                 targ_curr_sems.append(targ_curr_sem)
                 targ_futu_sems.append(targ_futu_sem)
-                occ_paths.append(occ_path)
+                times.append(time)
 
         # filter valid data
         # Occupancy-related
         valid_pred_curr_sems, valid_pred_futu_sems, valid_targ_curr_sems, valid_targ_futu_sems = [], [], [], []
-        valid_occ_paths = []
+        valid_times = []
         for i, occ_idx in tqdm(enumerate(occ_index)):
             if len(occ_idx) != len(set(occ_idx)):
                 continue
@@ -526,14 +532,18 @@ class NuScenesWorldDataset(Custom3DDataset):
             valid_pred_futu_sems.append(pred_futu_sems[i])
             valid_targ_curr_sems.append(targ_curr_sems[i])
             valid_targ_futu_sems.append(targ_futu_sems[i])
-            valid_occ_paths.append(occ_paths[i])
+            valid_times.append(times[i])
+
+        # calc the average time
+        if len(valid_times) > 0:
+            avg_time = np.mean(valid_times)
+            logger.info(f'Average time: {avg_time:.2f}s')
 
         # delete invalid data
         pred_curr_sems = valid_pred_curr_sems
         pred_futu_sems = valid_pred_futu_sems
         targ_curr_sems = valid_targ_curr_sems
         targ_futu_sems = valid_targ_futu_sems
-        occ_paths = valid_occ_paths
 
         # evaluate time 0s also means reconstructing the current frame
         eval_dict = dict()
