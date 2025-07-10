@@ -30,6 +30,8 @@ class NuScenesWorldDataset(Custom3DDataset):
                  classes=None,
                  load_interval=1,
                  test_mode=False,
+                 generate_mode=False,
+                 generate_scene=None,
                  load_future_frame_number=0,
                  load_previous_frame_number=0,
                  load_previous_data=False,
@@ -52,7 +54,9 @@ class NuScenesWorldDataset(Custom3DDataset):
             pipeline=pipeline,
             classes=classes,
             test_mode=test_mode,
-            filter_empty_gt=filter_empty_gt
+            filter_empty_gt=filter_empty_gt,
+            generate_mode=generate_mode,
+            generate_scene=generate_scene,
         )
         self.load_previous_data = load_previous_data
         self.load_previous_frame_number = load_previous_frame_number
@@ -145,6 +149,15 @@ class NuScenesWorldDataset(Custom3DDataset):
         data_infos = data_infos[::self.load_interval]
         self.metadata = data['metadata']
         self.version = self.metadata['version']
+
+        if self.generate_mode:
+            generate_data_infos = []
+            for info in data_infos:
+                scene_name = info['occ_path'].split('/')[-2]
+                if scene_name != self.generate_scene:
+                    continue
+                generate_data_infos.append(info)
+            return generate_data_infos
         return data_infos
 
     def get_data_info(self, index):
