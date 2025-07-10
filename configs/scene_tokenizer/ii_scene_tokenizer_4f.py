@@ -158,7 +158,7 @@ share_data_config = dict(
 test_data_config = dict(
     pipeline=test_pipeline,
     load_future_frame_number=test_load_future_frame_number,
-    ann_file=data_root + 'world-nuscenes_infos_train.pkl')
+    ann_file=data_root + 'world-nuscenes_infos_val.pkl')
 
 data = dict(
     samples_per_gpu=samples_per_gpu,
