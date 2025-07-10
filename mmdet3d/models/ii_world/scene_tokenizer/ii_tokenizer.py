@@ -44,7 +44,7 @@ class IISceneTokenizer(CenterPoint):
                  lovasz_loss=None,
                  focal_loss=None,
                  embed_loss_weight=None,
-                 save_results=True,
+                 save_results=False,
                  results_type='occ3d',
                  **kwargs):
         super(IISceneTokenizer, self).__init__(**kwargs)
@@ -53,8 +53,10 @@ class IISceneTokenizer(CenterPoint):
         self.class_embeds_dim = class_embeds_dim
 
         # ---------------------- init Model ------------------------------
+        start_time = time.time()
         self.encoder = builder.build_backbone(encoder)
         self.vq = builder.build_backbone(vq)
+        end_time = time.time()
         self.decoder = builder.build_backbone(decoder)
         # Time module
         self.history_bev = None
@@ -193,6 +195,7 @@ class IISceneTokenizer(CenterPoint):
         bs, t, w, h, d = voxel_semantics.shape
 
         # 2. Process current voxel semantics
+        start_time = time.time()
         curr_bev, shapes = self.forward_encoder(voxel_semantics)
 
         # 3. Time fusion
@@ -200,6 +203,7 @@ class IISceneTokenizer(CenterPoint):
 
         # 4. vq
         z_sampled, loss, info = self.vq(curr_bev, sampled_bev, is_voxel=False)
+        end_time = time.time()
 
         # 5. Process Decoder
         logits = self.forward_decoder(z_sampled, shapes, (bs, 1, w, h, d))
@@ -225,6 +229,7 @@ class IISceneTokenizer(CenterPoint):
         output_dict['semantics'] = pred.astype(np.uint8)
         output_dict['targ_semantics'] = voxel_semantics.cpu().numpy().astype(np.uint8)
         output_dict['index'] = [img_meta['index'] for img_meta in img_metas]
+        output_dict['time'] = end_time - start_time
         return [output_dict]
 
     def forward_train(self, voxel_semantics, img_metas, **kwargs):
