@@ -70,6 +70,11 @@ def parse_args():
         type=str,
     )
     parser.add_argument(
+        '--save_npz',
+        default=False,
+        action='store_true'
+    )
+    parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
         help='Whether to fuse conv and bn, this will slightly increase'
@@ -397,9 +402,15 @@ def main():
                 vis_bev_oris.append(vis_bev_ori)
                 vis_bev_sams.append(vis_bev_sam)
                 vis_bev_sams_2.append(vis_bev_sam_2)
-            save_path = os.path.join(os.path.join(save_root, '{}'.format(i)))
-            show_fine_forecast_bev(save_path, vis_bev_oris, vis_bev_sams, vis_bev_sams_2, data, copy_data, copy_data_2)
-    elif args.task_mode == 'high_level_control':
+            if args.save_npz:
+                np.savez(os.path.join(save_root, '{}_ori.npz'.format(i)), semantics=pred_semantics_result_ori)
+                np.savez(os.path.join(save_root, '{}_sam.npz'.format(i)), semantics=pred_semantics_result_sam)
+                np.savez(os.path.join(save_root, '{}_sam_2.npz'.format(i)), semantics=pred_semantics_result_sam_2)
+            else:
+                save_path = os.path.join(save_root, 'forecast_bev_{}'.format(i))
+                show_fine_forecast_bev(save_path, vis_bev_oris, vis_bev_sams, vis_bev_sams_2, data, copy_data, copy_data_2)
+
+    elif args.task_mode == 'high-level-control':
         # Generate example of high-level control, utilize the cmd state to control the future forecast
         for i, data in enumerate(data_loader):
             print('Number of data: {}'.format(i))
@@ -432,8 +443,14 @@ def main():
                     vis_bevs_rights.append(vis_bevs_right)
                     vis_bevs_lefts.append(vis_bevs_left)
                     vis_bevs_straights.append(vis_bevs_straight)
-                save_path = os.path.join(save_root, 'forecast_bev_{}'.format(i))
-                show_high_level_forecast_bev(save_path, vis_bevs_rights, vis_bevs_lefts, vis_bevs_straights)
+
+                if args.save_npz:
+                    np.savez(os.path.join(save_root, '{}_right.npz'.format(i)), semantics=pred_semantics_right)
+                    np.savez(os.path.join(save_root, '{}_left.npz'.format(i)), semantics=pred_semantics_left)
+                    np.savez(os.path.join(save_root, '{}_straight.npz'.format(i)), semantics=pred_semantics_straight)
+                else:
+                    save_path = os.path.join(save_root, 'forecast_bev_{}'.format(i))
+                    show_high_level_forecast_bev(save_path, vis_bevs_rights, vis_bevs_lefts, vis_bevs_straights)
 
 
 

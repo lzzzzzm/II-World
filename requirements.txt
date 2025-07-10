@@ -5,6 +5,8 @@ trimesh
 pyquaternion
 nuscenes-devkit
 scikit-image
+mmengine
+open3d==0.16.0
 yapf==0.40.1
 numpy==1.23.5
 tensorboard==2.14.0

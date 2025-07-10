@@ -119,13 +119,18 @@ Also, you can visualize the generated world with the fine-grained control (utili
 python tools/generate.py configs/world_model/ii_generate_world.py ckpts/ii_generate_world.pth \
 --generate_path generate_output --generate_scene_name scene-0270 --generate_frame 12 --task_mode generate
 ```
-The visualization
+If you want to visualize the 3D occupancy map, you can set `--save_npz` in the script above, and the generated 3D occupancy npz will be saved in the `generate_output` folder.
+
+Utilize the following command to visualize the generated 3D occupancy map:
+```bash
+python tools/vis_occ_3d.py --vis-single-data \PATH/TO/GENERATED/3D_OCCUPANCY.npz --vis-path demo_output
+```
+More visualization options can be found in the `tools/vis_occ_3d.py` file.
 
 ## Acknowledgement
 
 Thanks to the following excellent projects:
 
-- [SparseOcc](https://github.com/MCG-NJU/SparseOcc)
-- [BEVDet](https://github.com/HuangJunJie2017/BEVDet)
-- [FB-Occ](https://github.com/NVlabs/FB-BEV)
+- [OccWorld](https://github.com/wzzheng/OccWorld)
+- [OccSora](https://github.com/wzzheng/OccSora)
 - [mmdetection3d](https://github.com/open-mmlab/mmdetection3d)
