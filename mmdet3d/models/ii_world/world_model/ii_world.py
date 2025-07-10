@@ -368,7 +368,9 @@ class II_World(CenterPoint):
 
     def forward_test(self, latent, voxel_semantics, img_metas, **kwargs):
         # Autoregressive predict future latent & Forward future latent
+        start_time = time.time()
         sample_dict = self.forward_sample(latent, img_metas, self.test_future_frame, train=False)
+        end_time = time.time()
 
         return_dict = dict()
         sample_idx = img_metas[0]['sample_idx']
@@ -380,13 +382,13 @@ class II_World(CenterPoint):
             pred_curr_voxel_semantics = self.obtain_scene_from_token(latent[:, 0])
             pred_curr_voxel_semantics = pred_curr_voxel_semantics.softmax(-1).argmax(-1)
             if self.dataset_type != 'waymo':
-                # Due to memory limitation
                 return_dict['pred_curr_semantics'] = pred_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
                 return_dict['targ_curr_semantics'] = targ_curr_voxel_semantics.cpu().numpy().astype(np.uint8)
 
             pred_latents = sample_dict['pred_latents']
             pred_voxel_semantics = self.obtain_scene_from_token(pred_latents)
             pred_voxel_semantics = pred_voxel_semantics.softmax(-1).argmax(-1)
+            bs = pred_voxel_semantics.shape[0]
 
             if self.dataset_type == 'waymo':
                 # Due to the large waymo dataset, we only evaluate the eval_time-th frame
@@ -409,6 +411,7 @@ class II_World(CenterPoint):
         return_dict['occ_index'] = [img_meta['occ_index'] for img_meta in img_metas]
         return_dict['index'] = [img_meta['index'] for img_meta in img_metas]
         return_dict['sample_idx'] = sample_idx
+        return_dict['time'] = (end_time - start_time) / self.test_future_frame / bs
 
         return [return_dict]
 
