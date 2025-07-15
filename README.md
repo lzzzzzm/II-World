@@ -4,6 +4,10 @@
 
 </div>
 
+<h3 align="center">
+  <a href="https://arxiv.org/abs/2507.09144">arXiv</a> 
+</h3>
+
 https://github.com/user-attachments/assets/693ba6d3-46ba-4529-ae3f-dc8a3456e4cc
 
 ## 🚀 News
