@@ -44,7 +44,7 @@ class IISceneTokenizer(CenterPoint):
                  lovasz_loss=None,
                  focal_loss=None,
                  embed_loss_weight=None,
-                 save_results=False,
+                 save_results=True,
                  results_type='occ3d',
                  **kwargs):
         super(IISceneTokenizer, self).__init__(**kwargs)

@@ -103,9 +103,12 @@ Evaluate II-Tokenizer with 6GPUs:
 ```bash
 bash tools/dist_test.sh configs/scene_tokenizer/ii_scene_tokenizer_4f.py TO/CKPTS
 ```
-When evaluate II-Tokenizer, the prediction tokens will be saved to `data/nuscenes/save_dir/token_4f` folder, which is used for the next step training of II-World.
-
-So you should eval two times for II-Tokenizer, one for training set and one for validation set.
+> [!IMPORTANT]
+> Before training or evaluating II-World, you should first evaluate the II-Tokenizer to generate the prediction tokens. By default, the II-Tokenizer will save the prediction tokens to `data/nuscenes/save_dir/token_4f` folder.
+> 
+> You can change the `test_data_config` in the tokenizer config for different datasets. 
+> 
+> When generate the training set prediction tokens, you can set the `ann_file` in `test_data_config` to `world-nuscenes_infos_train.pkl`
 
 Train II-World with 8GPUs:
 ```bash
