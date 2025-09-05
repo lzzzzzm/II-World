@@ -106,6 +106,8 @@ bash tools/dist_test.sh configs/scene_tokenizer/ii_scene_tokenizer_4f.py TO/CKPT
 > [!IMPORTANT]
 > Before training or evaluating II-World, you should first evaluate the II-Tokenizer to generate the prediction tokens. By default, the II-Tokenizer will save the prediction tokens to `data/nuscenes/save_dir/token_4f` folder.
 > 
+> Also, make sure you utilize the number of GPU can be divided by 150 when evaluating the II-Tokenizer.
+> 
 > You can change the `test_data_config` in the tokenizer config for different datasets. 
 > 
 > When generate the training set prediction tokens, you can set the `ann_file` in `test_data_config` to `world-nuscenes_infos_train.pkl`
