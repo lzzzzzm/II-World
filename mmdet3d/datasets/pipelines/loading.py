@@ -136,6 +136,13 @@ class LoadStreamOcc3D(object):
             for key in self.waymo_map.keys():
                 map_semantics[curr_semantics == key] = self.waymo_map[key]
             curr_semantics = map_semantics
+        elif self.dataset_type == 'stcocc':
+            curr_occ_path = curr_occ_path.replace('gts', 'stc-results')
+            occ_gt_label = os.path.join(curr_occ_path, "labels.npz")
+            occ_labels = np.load(occ_gt_label)
+            curr_semantics = occ_labels['semantics']
+        else:
+            raise NotImplementedError
 
         # load previous frame
         previous_semantics = []
@@ -149,10 +156,17 @@ class LoadStreamOcc3D(object):
                 for key in self.waymo_map.keys():
                     map_semantics[previous_semantic == key] = self.waymo_map[key]
                 previous_semantic = map_semantics
-            else:
+            elif self.dataset_type == 'stcocc':
+                path = path.replace('gts', 'stc-results')
                 previous_occ_gt_label = os.path.join(path, "labels.npz")
                 previous_occ_label = np.load(previous_occ_gt_label)
                 previous_semantic = previous_occ_label['semantics']
+            elif self.dataset_type == 'occ3d':
+                previous_occ_gt_label = os.path.join(path, "labels.npz")
+                previous_occ_label = np.load(previous_occ_gt_label)
+                previous_semantic = previous_occ_label['semantics']
+            else:
+                raise NotImplementedError
             previous_semantics.append(previous_semantic)
 
         # load future frame
@@ -167,7 +181,12 @@ class LoadStreamOcc3D(object):
                 for key in self.waymo_map.keys():
                     map_semantics[future_semantic == key] = self.waymo_map[key]
                 future_semantic = map_semantics
-            else:
+            elif self.dataset_type == 'stcocc':
+                path = path.replace('gts', 'stc-results')
+                future_occ_gt_label = os.path.join(path, "labels.npz")
+                future_occ_label = np.load(future_occ_gt_label)
+                future_semantic = future_occ_label['semantics']
+            elif self.dataset_type == 'occ3d':
                 future_occ_gt_label = os.path.join(path, "labels.npz")
                 future_occ_label = np.load(future_occ_gt_label)
                 future_semantic = future_occ_label['semantics']
